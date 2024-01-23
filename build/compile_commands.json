@@ -1,8 +1,0 @@
-[
-{
-  "directory": "C:/Dev/cpp-projects/engine/build",
-  "command": "C:\\Dev\\MinGW\\mingw64\\bin\\g++.exe  @CMakeFiles/engine.dir/includes_CXX.rsp -g -o CMakeFiles\\engine.dir\\main.cpp.obj -c C:\\Dev\\cpp-projects\\engine\\main.cpp",
-  "file": "C:/Dev/cpp-projects/engine/main.cpp",
-  "output": "CMakeFiles/engine.dir/main.cpp.obj"
-}
-]

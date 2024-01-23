@@ -1,1 +1,0 @@
- "C:/Dev/cpp-projects/engine/dependencies/glfw/lib-mingw-w64/libglfw3.a" "C:/Dev/cpp-projects/engine/dependencies/glad/src/gl.c" -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 

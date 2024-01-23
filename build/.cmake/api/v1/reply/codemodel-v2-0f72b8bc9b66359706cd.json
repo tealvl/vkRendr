@@ -7,16 +7,8 @@
 				{
 					"build" : ".",
 					"jsonFile" : "directory-.-Debug-d0094a50bb2071803777.json",
-					"minimumCMakeVersion" : 
-					{
-						"string" : "3.0"
-					},
 					"projectIndex" : 0,
-					"source" : ".",
-					"targetIndexes" : 
-					[
-						0
-					]
+					"source" : "."
 				}
 			],
 			"name" : "Debug",
@@ -27,23 +19,10 @@
 					[
 						0
 					],
-					"name" : "engine",
-					"targetIndexes" : 
-					[
-						0
-					]
+					"name" : "Project"
 				}
 			],
-			"targets" : 
-			[
-				{
-					"directoryIndex" : 0,
-					"id" : "engine::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-engine-Debug-44104a1ac952ef9a9ec4.json",
-					"name" : "engine",
-					"projectIndex" : 0
-				}
-			]
+			"targets" : []
 		}
 	],
 	"kind" : "codemodel",
