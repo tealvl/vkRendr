@@ -3,17 +3,8 @@
 #include <iostream>
 #include <vector>
 #include <cstring>
-#include <optional>
 
-struct QueueFamilyIndices {
-    std::optional<uint32_t> graphicsFamily;
-
-    bool isComplete() {
-        return graphicsFamily.has_value();
-    }
-};
-
-QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice device) {
     QueueFamilyIndices indices;
     
     uint32_t queueFamilyCount = 0;
@@ -27,22 +18,21 @@ QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
         if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
             indices.graphicsFamily = i;
         }
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+        if(presentSupport){
+            indices.presentFamily = i;
+        }
+
+        if (indices.isComplete()) {
+            break;
+        }
         i++;
     }
     return indices;
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-VkDebugUtilsMessageTypeFlagsEXT messageType,
-const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-void* pUserData) {
-std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
-
-return VK_FALSE;
-}
-
-bool isPhysicalDeviceSuitable(VkPhysicalDevice device) {
+bool HelloTriangleApplication::isPhysicalDeviceSuitable(VkPhysicalDevice device) {
 VkPhysicalDeviceProperties deviceProperties;
 VkPhysicalDeviceFeatures deviceFeatures;
 vkGetPhysicalDeviceProperties(device, &deviceProperties);
@@ -52,7 +42,8 @@ return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
         deviceFeatures.geometryShader;
 }
 
-VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {    auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+VkResult HelloTriangleApplication::CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {   
+     auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
     } else {
@@ -60,7 +51,7 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMes
     }
 }
 
-void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
+void HelloTriangleApplication::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     if (func != nullptr) {
     func(instance, debugMessenger, pAllocator);
@@ -87,7 +78,9 @@ void HelloTriangleApplication::initVulkan(){
     createInstance();
     setupDebugMessenger();
     pickPhysicalDevice();
+    createSurface();
     createLogicalDevice();
+  
 }
 
 void HelloTriangleApplication::mainLoop(){
@@ -101,9 +94,17 @@ void HelloTriangleApplication::cleanup(){
         DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
     }
     vkDestroyDevice(device, nullptr);
+    vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyInstance(instance, nullptr);
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+
+void HelloTriangleApplication::createSurface()
+{
+    if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create window surface!");
+    }
 }
 
 bool HelloTriangleApplication::checkValidationLayerSupport(){
@@ -208,6 +209,7 @@ void HelloTriangleApplication::createLogicalDevice(){
     }
 
     vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+    vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &presentQueue);
 }
 
 void HelloTriangleApplication::setupDebugMessenger(){
@@ -256,7 +258,7 @@ std::vector<const char*> HelloTriangleApplication::getRequiredExtensions() {
     return extensions;
 }
 
-bool isDeviceSuitable(VkPhysicalDevice device) {
+bool HelloTriangleApplication::isDeviceSuitable(VkPhysicalDevice device) {
     QueueFamilyIndices indices = findQueueFamilies(device);
     return indices.isComplete();
 }
