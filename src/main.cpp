@@ -4,7 +4,7 @@
 #include "HelloTriangleApplication.hpp"
 
 int main() {
-    HelloTriangleApplication app;
+    Application app;
 
     try {
         app.run();
