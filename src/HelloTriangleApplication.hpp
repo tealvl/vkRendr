@@ -8,7 +8,7 @@
 #include <fstream>
 
 const std::vector<const char*> validationLayers = {
-"VK_LAYER_KHRONOS_validation"
+    "VK_LAYER_KHRONOS_validation"
 };
 
 const std::vector<const char*> deviceExtensions = {
@@ -23,6 +23,8 @@ const bool enableValidationLayers = true;
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
+const int MAX_FRAMES_IN_FLIGHT = 2;
+
 
 static std::vector<char> readFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -87,12 +89,19 @@ private:
     VkPipeline graphicsPipeline;
     std::vector<VkFramebuffer> swapChainFramebuffers;
     VkCommandPool commandPool;
-    VkCommandBuffer commandBuffer;
+    std::vector<VkCommandBuffer> commandBuffers;
+    std::vector<VkSemaphore> imageAvailableSemaphores;
+    std::vector<VkSemaphore> renderFinishedSemaphores;
+    std::vector<VkFence> inFlightFences;
+    uint32_t currentFrame = 0;
+    bool framebufferResized = false;
 
     void initWindow();
+    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
     void initVulkan();
     void mainLoop();
     void cleanup();
+    void cleanupSwapChain();
     void createSurface();
     bool checkValidationLayerSupport(); 
     void createInstance();
@@ -113,12 +122,15 @@ private:
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
     void createSwapChain();
     void createImageViews();
+    void recreateSwapChain();
     void createGraphicsPipeline();
     VkShaderModule createShaderModule(const std::vector<char> &code);
     void createRenderPass();
     void createFramebuffers();
     void createCommandPool();
-    void createCommandBuffer();
+    void createCommandBuffers();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void drawFrame();
+    void createSyncObjects();
+
 };
