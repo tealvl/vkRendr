@@ -164,6 +164,9 @@ private:
     std::vector<VkDeviceMemory> uniformBuffersMemory;
     std::vector<void*> uniformBuffersMapped;
 
+    VkDescriptorPool descriptorPool;
+    std::vector<VkDescriptorSet> descriptorSets;
+
     void initWindow();
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
     void initVulkan();
@@ -209,4 +212,5 @@ private:
     void createDescriptorSetLayout();
     void updateUniformBuffer(uint32_t currentImage);
     void createDescriptorPool();
+    void createDescriptorSets();
 };
