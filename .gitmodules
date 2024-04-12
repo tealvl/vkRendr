@@ -10,3 +10,6 @@
 	path = dependencies/googletest
 	url = https://github.com/google/googletest.git
 	recursive = true
+[submodule "entt"]
+	path = entt
+	url = https://github.com/skypjack/entt.git
