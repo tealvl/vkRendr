@@ -18,7 +18,7 @@ target_link_libraries(engine PRIVATE Vulkan::Vulkan)
 target_include_directories(engine
     PRIVATE dependencies/Vulkan-Hpp/glm
     PRIVATE dependencies/Vulkan-Hpp/glfw/include
-     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # Указываем путь к библиотекам glfw
