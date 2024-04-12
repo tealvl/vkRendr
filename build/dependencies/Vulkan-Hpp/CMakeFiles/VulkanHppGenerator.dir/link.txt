@@ -1,0 +1,3 @@
+C:\Dev\MinGW\mingw64\bin\cmake.exe -E rm -f CMakeFiles\VulkanHppGenerator.dir/objects.a
+C:\Dev\MinGW\mingw64\bin\ar.exe qc CMakeFiles\VulkanHppGenerator.dir/objects.a @CMakeFiles\VulkanHppGenerator.dir\objects1.rsp
+C:\Dev\MinGW\mingw64\bin\g++.exe -g -Wl,--whole-archive CMakeFiles\VulkanHppGenerator.dir/objects.a -Wl,--no-whole-archive -o VulkanHppGenerator.exe -Wl,--out-implib,libVulkanHppGenerator.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\VulkanHppGenerator.dir\linkLibs.rsp

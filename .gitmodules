@@ -10,6 +10,18 @@
 	path = dependencies/googletest
 	url = https://github.com/google/googletest.git
 	recursive = true
+[submodule "dependencies/entt"]
+	path = dependencies/entt
+	url = https://github.com/skypjack/entt.git
+	recursive = true
+[submodule "dependencies/stb"]
+	path = dependencies/stb
+	url = https://github.com/nothings/stb.git
+	recursive = true
+[submodule "dependencies/VulkanMemoryAllocator"]
+	path = dependencies/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+	recursive = true
 [submodule "entt"]
 	path = entt
 	url = https://github.com/skypjack/entt.git

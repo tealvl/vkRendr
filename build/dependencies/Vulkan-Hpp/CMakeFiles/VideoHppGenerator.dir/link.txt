@@ -1,0 +1,3 @@
+C:\Dev\MinGW\mingw64\bin\cmake.exe -E rm -f CMakeFiles\VideoHppGenerator.dir/objects.a
+C:\Dev\MinGW\mingw64\bin\ar.exe qc CMakeFiles\VideoHppGenerator.dir/objects.a @CMakeFiles\VideoHppGenerator.dir\objects1.rsp
+C:\Dev\MinGW\mingw64\bin\g++.exe -g -Wl,--whole-archive CMakeFiles\VideoHppGenerator.dir/objects.a -Wl,--no-whole-archive -o VideoHppGenerator.exe -Wl,--out-implib,libVideoHppGenerator.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\VideoHppGenerator.dir\linkLibs.rsp
