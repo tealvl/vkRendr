@@ -11,20 +11,22 @@ add_executable(engine
     src/HelloTriangleApplication.cpp
 )
 
-find_package(Vulkan REQUIRED)
-target_link_libraries(engine PRIVATE Vulkan::Vulkan)
-
-# Указываем пути к заголовочным файлам glm и glfw
+# Указываем пути к заголовочным файлам 
 target_include_directories(engine
     PRIVATE dependencies/Vulkan-Hpp/glm
     PRIVATE dependencies/Vulkan-Hpp/glfw/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PRIVATE dependencies/stb
 )
 
-# Указываем путь к библиотекам glfw
+# Указываем путь к исходникам
 target_link_directories(engine 
-PRIVATE dependencies/Vulkan-Hpp/glfw/src)
+PRIVATE dependencies/Vulkan-Hpp/glfw/src
+)
 
-# Линкуем сами библиотеки GLFW
+# Линкуем библиотеки 
+find_package(Vulkan REQUIRED)
 target_link_libraries(engine 
-PRIVATE glfw)
+PRIVATE Vulkan::Vulkan
+PRIVATE glfw
+)
