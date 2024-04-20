@@ -1,4 +1,6 @@
 #include "HelloTriangleApplication.hpp"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 QueueFamilyIndices Application::findQueueFamilies(VkPhysicalDevice device) {
     QueueFamilyIndices indices;
@@ -121,7 +123,7 @@ void Application::cleanup(){
 
     vkDestroyImage(device, textureImage, nullptr);
     vkFreeMemory(device, textureImageMemory, nullptr);
-    
+
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 
@@ -964,7 +966,7 @@ void Application::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMe
 {
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+    bufferInfo.size = size;
     bufferInfo.usage = usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -1145,7 +1147,7 @@ void Application::createDescriptorSets()
 void Application::createTextureImage()
 {
     int texWidth, texHeight, texChannels;
-    stbi_uc* pixels = stbi_load("resourses/textures/test.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    stbi_uc* pixels = stbi_load("C:/Dev/cpp-projects/engine/resources/textures/test.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     if (!pixels) {
@@ -1158,6 +1160,7 @@ void Application::createTextureImage()
     createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT 
     | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
+    std::cout << imageSize <<std::endl;
     void* data;
     vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
         memcpy(data, pixels, static_cast<size_t>(imageSize));
@@ -1227,8 +1230,12 @@ void Application::transitionImageLayout(VkImage image, VkFormat format, VkImageL
     barrier.newLayout = newLayout;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.srcAccessMask = 0; 
-    barrier.dstAccessMask = 0; 
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
 
     VkPipelineStageFlags sourceStage;
     VkPipelineStageFlags destinationStage;
@@ -1251,7 +1258,7 @@ void Application::transitionImageLayout(VkImage image, VkFormat format, VkImageL
 
     vkCmdPipelineBarrier(
     commandBuffer,
-    0 , 0 ,
+    sourceStage , destinationStage ,
     0,
     0, nullptr,
     0, nullptr,
@@ -1259,6 +1266,8 @@ void Application::transitionImageLayout(VkImage image, VkFormat format, VkImageL
         
     endSingleTimeCommands(commandBuffer);
 }
+
+
 
 void Application::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
     VkCommandBuffer commandBuffer = beginSingleTimeCommands();
