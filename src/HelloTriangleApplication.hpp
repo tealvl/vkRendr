@@ -172,7 +172,9 @@ private:
 
     VkImage textureImage;
     VkDeviceMemory textureImageMemory;
-
+    VkImageView textureImageView;
+    VkSampler textureSampler;
+    
     void initWindow();
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
     void initVulkan();
@@ -198,6 +200,7 @@ private:
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
     void createSwapChain();
+    VkImageView createImageView(VkImage image, VkFormat format);
     void createImageViews();
     void recreateSwapChain();
     void createGraphicsPipeline();
@@ -222,7 +225,9 @@ private:
     void createDescriptorPool();
     void createDescriptorSets();
     void createTextureImage();
+    void createTextureImageView();
     void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage &image, VkDeviceMemory &imageMemory);
     void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
     void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+    void createTextureSampler();
 };
