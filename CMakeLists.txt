@@ -24,8 +24,9 @@ target_link_directories(engine
 PRIVATE dependencies/Vulkan-Hpp/glfw/src
 )
 
-# Линкуем библиотеки 
+
 find_package(Vulkan REQUIRED)
+# Линкуем библиотеки 
 target_link_libraries(engine 
 PRIVATE Vulkan::Vulkan
 PRIVATE glfw
