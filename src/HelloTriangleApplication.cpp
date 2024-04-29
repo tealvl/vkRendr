@@ -93,6 +93,7 @@ void Application::initVulkan(){
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
+    createDepthResources();
     createTextureImage();
     createTextureImageView();
     createTextureSampler();
@@ -1354,4 +1355,8 @@ void Application::createTextureSampler()
     if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture sampler!");
     }
+}
+
+void Application::createDepthResources(){
+
 }
