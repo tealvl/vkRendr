@@ -21,6 +21,8 @@ target_include_directories(engine
     PRIVATE dependencies/Vulkan-Hpp/vulkan/
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
     PRIVATE dependencies/stb
+    PRIVATE dependencies/tinyobjloader
+
 )
 
 # Указываем путь к исходникам
