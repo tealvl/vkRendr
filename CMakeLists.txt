@@ -12,6 +12,8 @@ add_executable(engine
     src/renderer/test.cpp
     src/renderer/renderer.cpp
     src/renderer/window.cpp
+    src/renderer/camera.cpp
+    src/renderer/transform.cpp
 )
 
 # Указываем пути к заголовочным файлам 
@@ -20,8 +22,10 @@ target_include_directories(engine
     PRIVATE dependencies/Vulkan-Hpp/glfw/include
     PRIVATE dependencies/Vulkan-Hpp/vulkan/
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer
     PRIVATE dependencies/stb
     PRIVATE dependencies/tinyobjloader
+
 
 )
 

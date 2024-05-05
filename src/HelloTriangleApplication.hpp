@@ -25,6 +25,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
 
+#include "camera.hpp"
+#include "transform.hpp"
 
 const std::string MODEL_PATH = "C:/Dev/cpp-projects/engine/resources/models/vikingRoom.obj";
 const std::string TEXTURE_PATH = "C:/Dev/cpp-projects/engine/resources/textures/viking_room.png";
@@ -217,6 +219,9 @@ private:
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
+
+    rendr::Camera camera;
+    rendr::Transform model_matrix;
 
     void initWindow();
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
