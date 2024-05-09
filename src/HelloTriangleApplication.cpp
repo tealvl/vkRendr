@@ -34,17 +34,6 @@ QueueFamilyIndices Application::findQueueFamilies(VkPhysicalDevice device) {
     return indices;
 }
 
-bool Application::isPhysicalDeviceSuitable(vk::raii::PhysicalDevice device) {
-    device.
-VkPhysicalDeviceProperties deviceProperties;
-VkPhysicalDeviceFeatures deviceFeatures;
-vkGetPhysicalDeviceProperties(device, &deviceProperties);
-vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
-return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
-    deviceFeatures.geometryShader;
-}
-
 
 void Application::run(){
     initVulkan();
@@ -53,7 +42,6 @@ void Application::run(){
 }
 
 void Application::initVulkan(){
-    pickPhysicalDevice();
     createLogicalDevice();
     createSwapChain();
     createImageViews();
@@ -78,7 +66,7 @@ void Application::initVulkan(){
 
 void Application::mainLoop(){
     while (!window_.shouldClose()) {
-        window_.pollIvents();
+        window_.pollEvents();
         drawFrame();
     }
     vkDeviceWaitIdle(device);
@@ -161,23 +149,6 @@ void Application::createLogicalDevice(){
 
     vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
     vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &presentQueue);
-}
-
-void Application::pickPhysicalDevice(){
-    vk::raii::PhysicalDevices devices( instance_.vkInstance );
-
-    bool suitableDevicePicked = false;
-    for (const auto& device : devices) {
-        if (isPhysicalDeviceSuitable(device)) {
-            physicalDevice = device;
-            suitableDevicePicked = true;
-            break;
-        }
-    }
-    //TODO ошибки
-    if (!suitableDevicePicked) {
-        throw std::runtime_error("failed to find a suitable GPU!");
-    }
 }
 
 bool Application::isDeviceSuitable(VkPhysicalDevice device) {

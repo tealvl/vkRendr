@@ -159,16 +159,20 @@ struct SwapChainSupportDetails {
 class Application {
 public:
     void run();
+
     Application()
-    : window_(), instance_(), surface(window_.createSurface(instance_.vkInstance)), physicalDevice(nullptr)
+    : 
+    glwfContext_(), 
+    window_(), 
+    instance_(), 
+    surface(window_.createSurface(*instance_)), 
+    physicalDevice(rendr::pickPhysicalDevice(*instance_))
     {}
+
 private:
+    rendr::GlfwContext glwfContext_;
     rendr::Window window_;
     rendr::Instance instance_; 
-    //GLFWwindow* window;
-    //VkInstance instance;
-
-    //VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     vk::raii::PhysicalDevice physicalDevice;
     
     VkDevice device;
@@ -176,8 +180,8 @@ private:
     VkQueue graphicsQueue;
     VkQueue presentQueue;
 
-    //VkSurfaceKHR surface;
     vk::raii::SurfaceKHR surface;
+
 
     VkSwapchainKHR swapChain;
     std::vector<VkImage> swapChainImages;

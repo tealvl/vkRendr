@@ -1,8 +1,13 @@
 #include <vector>
 #include <fstream>
+#include <vulkan/vulkan_raii.hpp>
+
 namespace rendr{
 
+//TODO вынести в файл конфигурации требования к девайсу
+bool isPhysicalDeviceSuitable(const vk::raii::PhysicalDevice& device);
 
+vk::raii::PhysicalDevice pickPhysicalDevice(const vk::raii::Instance& instance);
 
 static std::vector<char> readFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);

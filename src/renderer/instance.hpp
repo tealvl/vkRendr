@@ -13,14 +13,15 @@ const std::string engineName = "Renderer";
 const int appVersion = 1;
 const int engineVersion = 1;
 
-struct Instance{
-    vk::raii::Context  context;
-    vk::raii::Instance vkInstance;
-    vk::raii::DebugUtilsMessengerEXT debugUtilsMessenger;
+class Instance{
+private:
+    vk::raii::Context  context_;
+    vk::raii::Instance instance_;
+    vk::raii::DebugUtilsMessengerEXT debugUtilsMessenger_;
 
-
+public:
     Instance()
-    :context(), vkInstance(nullptr), debugUtilsMessenger(nullptr) 
+    :context_(), instance_(nullptr), debugUtilsMessenger_(nullptr) 
     {   
         //TODO Подумать над обработкой ошибок    
         if (enableValidationLayers && !checkValidationLayerSupport()) {
@@ -55,13 +56,17 @@ struct Instance{
         instanceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         instanceCreateInfo.ppEnabledExtensionNames = extensions.data();
 
-        vkInstance = vk::raii::Instance( context, instanceCreateInfo );
+        instance_ = vk::raii::Instance( context_, instanceCreateInfo );
         
         if (enableValidationLayers) {
             VkDebugUtilsMessengerCreateInfoEXT debugCreateInfoInsideInstance{};
             populateDebugMessengerCreateInfo(debugCreateInfoOutsideInstance);
-            debugUtilsMessenger = vk::raii::DebugUtilsMessengerEXT(vkInstance, debugCreateInfoInsideInstance);
+            debugUtilsMessenger_ = vk::raii::DebugUtilsMessengerEXT(instance_, debugCreateInfoInsideInstance);
         }
+    }
+
+    vk::raii::Instance const& operator*(){
+        return instance_;
     }
 };
 }
