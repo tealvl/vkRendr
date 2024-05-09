@@ -10,10 +10,11 @@ add_executable(engine
     src/main.cpp
     src/HelloTriangleApplication.cpp
     src/renderer/test.cpp
-    src/renderer/renderer.cpp
     src/renderer/window.cpp
     src/renderer/camera.cpp
     src/renderer/transform.cpp
+    src/renderer/instance.cpp
+    src/renderer/debug.cpp
 )
 
 # Указываем пути к заголовочным файлам 

@@ -27,6 +27,8 @@
 
 #include "camera.hpp"
 #include "transform.hpp"
+#include "utility.hpp"
+#include "instance.hpp"
 
 const std::string MODEL_PATH = "C:/Dev/cpp-projects/engine/resources/models/vikingRoom.obj";
 const std::string TEXTURE_PATH = "C:/Dev/cpp-projects/engine/resources/textures/viking_room.png";
@@ -124,30 +126,20 @@ const uint32_t HEIGHT = 600;
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 
-static std::vector<char> readFile(const std::string& filename) {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+// static std::vector<char> readFile(const std::string& filename) {
+//     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open file!");
-    }
-    size_t fileSize = (size_t) file.tellg();
-    std::vector<char> buffer(fileSize);
-    file.seekg(0);
-    file.read(buffer.data(), fileSize);
-    file.close();
+//     if (!file.is_open()) {
+//         throw std::runtime_error("failed to open file!");
+//     }
+//     size_t fileSize = (size_t) file.tellg();
+//     std::vector<char> buffer(fileSize);
+//     file.seekg(0);
+//     file.read(buffer.data(), fileSize);
+//     file.close();
 
-    return buffer;
-}
-
-static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData) {
-    std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
-
-    return VK_FALSE;
-}
+//     return buffer;
+// }
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -167,16 +159,26 @@ struct SwapChainSupportDetails {
 class Application {
 public:
     void run();
-
+    Application()
+    : window_(), instance_(), surface(window_.createSurface(instance_.vkInstance)), physicalDevice(nullptr)
+    {}
 private:
-    GLFWwindow* window;
-    VkInstance instance;
-    VkDebugUtilsMessengerEXT debugMessenger;
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    rendr::Window window_;
+    rendr::Instance instance_; 
+    //GLFWwindow* window;
+    //VkInstance instance;
+
+    //VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    vk::raii::PhysicalDevice physicalDevice;
+    
     VkDevice device;
+    
     VkQueue graphicsQueue;
     VkQueue presentQueue;
-    VkSurfaceKHR surface;
+
+    //VkSurfaceKHR surface;
+    vk::raii::SurfaceKHR surface;
+
     VkSwapchainKHR swapChain;
     std::vector<VkImage> swapChainImages;
     VkFormat swapChainImageFormat;
@@ -222,25 +224,16 @@ private:
 
     rendr::Camera camera;
     rendr::Transform model_matrix;
-
-    void initWindow();
+    
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
     void initVulkan();
     void mainLoop();
     void cleanup();
     void cleanupSwapChain();
-    void createSurface();
-    bool checkValidationLayerSupport(); 
-    void createInstance();
-    void setupDebugMessenger();
     void pickPhysicalDevice();
-    void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     bool isPhysicalDeviceSuitable(VkPhysicalDevice device);
-    void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks *pAllocator);
     void createLogicalDevice();
-    VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
-    std::vector<const char*> getRequiredExtensions();
     bool isDeviceSuitable(VkPhysicalDevice device);
     bool checkDeviceExtensionSupport(VkPhysicalDevice device);
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
