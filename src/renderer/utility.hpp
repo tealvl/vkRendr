@@ -1,15 +1,47 @@
 #include <vector>
 #include <fstream>
+#include <set>
+#include <string>
 #include <vulkan/vulkan_raii.hpp>
+#include <optional>
 
 namespace rendr{
 
 //TODO вынести в файл конфигурации требования к девайсу
-bool isPhysicalDeviceSuitable(const vk::raii::PhysicalDevice& device);
+const std::vector<const char*> deviceExtensions = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
 
-vk::raii::PhysicalDevice pickPhysicalDevice(const vk::raii::Instance& instance);
+struct QueueFamilyIndices {
+std::optional<uint32_t> graphicsFamily;
+std::optional<uint32_t> presentFamily;
 
-static std::vector<char> readFile(const std::string& filename) {
+bool isComplete() {
+    return graphicsFamily.has_value() && presentFamily.has_value();
+}
+};
+
+struct DeviceWithQueues{
+    vk::raii::Device device;
+    vk::raii::Queue graphicsQueue;
+    vk::raii::Queue presentQueue;
+};
+
+struct SwapChainSupportDetails {
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> presentModes;
+};
+
+bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+bool isPhysicalDeviceSuitable(vk::raii::PhysicalDevice const &device, vk::raii::SurfaceKHR const &surface);
+vk::raii::PhysicalDevice pickPhysicalDevice(vk::raii::Instance const &instance, vk::raii::SurfaceKHR const &surface);
+QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);
+SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
+DeviceWithQueues createDeviceWithQueues(vk::raii::PhysicalDevice const &physicalDevice, vk::raii::SurfaceKHR const &surface);
+
+static std::vector<char> readFile(std::string const &filename)
+{
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
@@ -23,5 +55,4 @@ static std::vector<char> readFile(const std::string& filename) {
 
     return buffer;
 }
-
 }

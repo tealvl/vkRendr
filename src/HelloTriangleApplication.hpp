@@ -89,57 +89,7 @@ namespace std {
     };
 }
 
-// const std::vector<Vertex> vertices = {
-//     {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-//     {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-//     {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-//     {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-//     {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-//     {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-//     {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-//     {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-// };
-
-
-// const std::vector<uint32_t> indices = {
-//     0, 1, 2, 2, 3, 0,
-//     4, 5, 6, 6, 7, 4
-// };
-
-const std::vector<const char*> validationLayers = {
-    "VK_LAYER_KHRONOS_validation"
-};
-
-const std::vector<const char*> deviceExtensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
-};
-
-#ifdef NDEBUG
-const bool enableValidationLayers = false;
-#else
-const bool enableValidationLayers = true;
-#endif
-
-const uint32_t WIDTH = 800;
-const uint32_t HEIGHT = 600;
 const int MAX_FRAMES_IN_FLIGHT = 2;
-
-
-// static std::vector<char> readFile(const std::string& filename) {
-//     std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-//     if (!file.is_open()) {
-//         throw std::runtime_error("failed to open file!");
-//     }
-//     size_t fileSize = (size_t) file.tellg();
-//     std::vector<char> buffer(fileSize);
-//     file.seekg(0);
-//     file.read(buffer.data(), fileSize);
-//     file.close();
-
-//     return buffer;
-// }
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -165,29 +115,36 @@ public:
     glwfContext_(), 
     window_(), 
     instance_(), 
-    surface(window_.createSurface(*instance_)), 
-    physicalDevice(rendr::pickPhysicalDevice(*instance_))
-    {}
+    surface_(window_.createSurface(*instance_)), 
+    physicalDevice_(rendr::pickPhysicalDevice(*instance_, surface_)),
+    device_(nullptr),
+    graphicsQueue_(nullptr),
+    presentQueue_(nullptr)
+    {
+        rendr::DeviceWithQueues deviceAndQueues = rendr::createDeviceWithQueues(physicalDevice_, surface_);
+        device_ = std::move(deviceAndQueues.device);
+        graphicsQueue_ = std::move(deviceAndQueues.graphicsQueue);
+        presentQueue_ = std::move(deviceAndQueues.presentQueue);
+    }
 
 private:
     rendr::GlfwContext glwfContext_;
     rendr::Window window_;
     rendr::Instance instance_; 
-    vk::raii::PhysicalDevice physicalDevice;
+    vk::raii::SurfaceKHR surface_;
+    vk::raii::PhysicalDevice physicalDevice_;
+    vk::raii::Device device_;
+    vk::raii::Queue graphicsQueue_;
+    vk::raii::Queue presentQueue_;
+
     
-    VkDevice device;
-    
-    VkQueue graphicsQueue;
-    VkQueue presentQueue;
-
-    vk::raii::SurfaceKHR surface;
-
-
     VkSwapchainKHR swapChain;
     std::vector<VkImage> swapChainImages;
     VkFormat swapChainImageFormat;
     VkExtent2D swapChainExtent;
     std::vector<VkImageView> swapChainImageViews;
+    
+    
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkDescriptorSetLayout descriptorSetLayout;
@@ -229,18 +186,10 @@ private:
     rendr::Camera camera;
     rendr::Transform model_matrix;
     
-    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
     void initVulkan();
     void mainLoop();
     void cleanup();
     void cleanupSwapChain();
-    void pickPhysicalDevice();
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
-    bool isPhysicalDeviceSuitable(VkPhysicalDevice device);
-    void createLogicalDevice();
-    bool isDeviceSuitable(VkPhysicalDevice device);
-    bool checkDeviceExtensionSupport(VkPhysicalDevice device);
-    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);

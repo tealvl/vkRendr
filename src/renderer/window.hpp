@@ -14,6 +14,24 @@ struct WindowData{
     int width_;
     int height_;
     std::string title_;
+
+    WindowData() : width_(0), height_(0), title_("") {}
+
+    WindowData(int width, int height, const std::string& title)
+        : width_(width), height_(height), title_(title) {}
+
+    WindowData(const WindowData& other)
+        : width_(other.width_), height_(other.height_), title_(other.title_) {}
+
+    // Оператор присваивания
+    WindowData& operator=(const WindowData& other) {
+        if (this != &other) { // Проверка на самоприсваивание
+            width_ = other.width_;
+            height_ = other.height_;
+            title_ = other.title_;
+        }
+        return *this;
+    }
 };
 
 struct WindowCallbacks{
@@ -27,7 +45,6 @@ struct WindowCallbacks{
     std::function<void(double, double)> mouseScroll = [](double, double){};
     std::function<void(uint32_t)> charInput = [](uint32_t){};
 };
-
 
 struct GlfwContext{
     GlfwContext(){
@@ -44,10 +61,9 @@ class GlfwWindow
 private:
     GLFWwindow* window_ptr_;
 public:
-    GlfwWindow(WindowData& winData){
+    GlfwWindow(WindowData winData){
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-        
         window_ptr_ = glfwCreateWindow(winData.width_, winData.height_, winData.title_.data(), nullptr, nullptr);
         glfwSetWindowUserPointer(window_ptr_, this);        
     }
@@ -78,13 +94,12 @@ class Window
 {
 private:
     GlfwWindow window_;
-    WindowData winData_;
     
 public:
     WindowCallbacks callbacks_;
     
     Window( int width = 800, int height  = 800, const std::string& title = "Vulkan App")
-    : winData_{width, height, title}, window_(winData_){}
+    : window_({width, height, title}){}
     
     void setCallbacks() {
 
@@ -101,6 +116,12 @@ public:
 
     bool shouldClose(){
         return static_cast<bool>(glfwWindowShouldClose(*window_));
+    }
+
+    std::pair<int, int> getFramebufferSize(){
+        std::pair<int, int> size;
+        glfwGetFramebufferSize(*window_, &size.first, &size.second);
+        return size;
     }
 
     void pollEvents(){

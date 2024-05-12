@@ -15,6 +15,7 @@ add_executable(engine
     src/renderer/transform.cpp
     src/renderer/instance.cpp
     src/renderer/debug.cpp
+    src/renderer/utility.cpp
 )
 
 # Указываем пути к заголовочным файлам 
