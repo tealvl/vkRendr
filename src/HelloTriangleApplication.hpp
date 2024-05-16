@@ -119,34 +119,48 @@ public:
     physicalDevice_(nullptr),
     device_(nullptr),
     graphicsQueue_(nullptr),
-    presentQueue_(nullptr)
+    presentQueue_(nullptr),
+    swapChain_(nullptr),
+    swapChainImages_()
     {
         instance_ = rendr::Instance(window_);
         surface_ = window_.createSurface(*instance_);
         physicalDevice_ = rendr::pickPhysicalDevice(*instance_, surface_);
+        
         rendr::DeviceWithQueues deviceAndQueues = rendr::createDeviceWithQueues(physicalDevice_, surface_);
         device_ = std::move(deviceAndQueues.device);
         graphicsQueue_ = std::move(deviceAndQueues.graphicsQueue);
         presentQueue_ = std::move(deviceAndQueues.presentQueue);
+        
+        rendr::SwapChainData swapChainData = rendr::createSwapChain(physicalDevice_, surface_, device_, window_);
+        swapChain_ = std::move(swapChainData.swapChain);
+        swapChainExtent_ = std::move(swapChainData.swapChainExtent);
+        swapChainImageFormat_ = std::move(swapChainData.swapChainImageFormat);
+        swapChainImages_ = swapChain_.getImages();
+        imageViews_ = rendr::createImageViews(swapChainImages_, device_, swapChainImageFormat_, vk::ImageAspectFlagBits::eColor);
     }
 
 private:
     rendr::GlfwContext glwfContext_;
     rendr::Window window_;
+    
     rendr::Instance instance_; 
+    
     vk::raii::SurfaceKHR surface_;
+    
     vk::raii::PhysicalDevice physicalDevice_;
     vk::raii::Device device_;
+    
     vk::raii::Queue graphicsQueue_;
     vk::raii::Queue presentQueue_;
 
-    
-    VkSwapchainKHR swapChain;
-    std::vector<VkImage> swapChainImages;
-    VkFormat swapChainImageFormat;
-    VkExtent2D swapChainExtent;
-    std::vector<VkImageView> swapChainImageViews;
-    
+    vk::raii::SwapchainKHR swapChain_;
+    vk::Format swapChainImageFormat_;
+    vk::Extent2D swapChainExtent_;
+
+    std::vector<vk::Image> swapChainImages_;
+
+    std::vector<vk::raii::ImageView> imageViews_;
     
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
@@ -196,7 +210,6 @@ private:
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
-    void createSwapChain();
     VkImageView createImageView(VkImage image, VkFormat format,VkImageAspectFlags aspectFlags);
     void createImageViews();
     void recreateSwapChain();

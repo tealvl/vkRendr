@@ -1,9 +1,11 @@
+#pragma once
 #include <vector>
 #include <fstream>
 #include <set>
 #include <string>
 #include <vulkan/vulkan_raii.hpp>
 #include <optional>
+#include "window.hpp"
 
 namespace rendr{
 
@@ -28,17 +30,35 @@ struct DeviceWithQueues{
 };
 
 struct SwapChainSupportDetails {
-    VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> presentModes;
+    vk::SurfaceCapabilitiesKHR capabilities;
+    std::vector<vk::SurfaceFormatKHR> formats;
+    std::vector<vk::PresentModeKHR> presentModes;
+};
+
+struct SwapChainData{
+    vk::raii::SwapchainKHR swapChain;
+    vk::Format swapChainImageFormat;
+    vk::Extent2D swapChainExtent;
 };
 
 bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 bool isPhysicalDeviceSuitable(vk::raii::PhysicalDevice const &device, vk::raii::SurfaceKHR const &surface);
 vk::raii::PhysicalDevice pickPhysicalDevice(vk::raii::Instance const &instance, vk::raii::SurfaceKHR const &surface);
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);
-SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
+SwapChainSupportDetails querySwapChainSupport(vk::raii::PhysicalDevice const &device, vk::raii::SurfaceKHR const &surface);
 DeviceWithQueues createDeviceWithQueues(vk::raii::PhysicalDevice const &physicalDevice, vk::raii::SurfaceKHR const &surface);
+
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const &availableFormats);
+
+vk::PresentModeKHR chooseSwapPresentMode(std::vector<vk::PresentModeKHR> const &availablePresentModes);
+
+vk::Extent2D chooseSwapExtent(vk::SurfaceCapabilitiesKHR const &capabilities, std::pair<int, int> const &winFramebufferSize);
+
+SwapChainData createSwapChain(vk::raii::PhysicalDevice const &physicalDevice, vk::raii::SurfaceKHR const &surface, vk::raii::Device const &device, Window const &win);
+
+vk::raii::ImageView createImageView(vk::raii::Device const &device, vk::Image const &image, vk::Format const &format, vk::ImageAspectFlags aspectFlags);
+
+std::vector<vk::raii::ImageView> createImageViews(std::vector<vk::Image> const &images, vk::raii::Device const &device, vk::Format const &format, vk::ImageAspectFlags aspectFlags);
 
 static std::vector<char> readFile(std::string const &filename)
 {
