@@ -115,12 +115,15 @@ public:
     glwfContext_(), 
     window_(), 
     instance_(), 
-    surface_(window_.createSurface(*instance_)), 
-    physicalDevice_(rendr::pickPhysicalDevice(*instance_, surface_)),
+    surface_(nullptr), 
+    physicalDevice_(nullptr),
     device_(nullptr),
     graphicsQueue_(nullptr),
     presentQueue_(nullptr)
     {
+        instance_ = rendr::Instance(window_);
+        surface_ = window_.createSurface(*instance_);
+        physicalDevice_ = rendr::pickPhysicalDevice(*instance_, surface_);
         rendr::DeviceWithQueues deviceAndQueues = rendr::createDeviceWithQueues(physicalDevice_, surface_);
         device_ = std::move(deviceAndQueues.device);
         graphicsQueue_ = std::move(deviceAndQueues.graphicsQueue);

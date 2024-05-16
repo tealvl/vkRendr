@@ -16,6 +16,8 @@ add_executable(engine
     src/renderer/instance.cpp
     src/renderer/debug.cpp
     src/renderer/utility.cpp
+    src/renderer/device.cpp
+    src/renderer/config.cpp
 )
 
 # Указываем пути к заголовочным файлам 

@@ -7,8 +7,6 @@
 #include <vulkan/vulkan_raii.hpp>
 
 namespace rendr{
-//return Vulkan instance extensions required by GLFW
-std::vector<const char*> getRequiredExtensions();
 
 struct WindowData{ 
     int width_;
@@ -22,16 +20,6 @@ struct WindowData{
 
     WindowData(const WindowData& other)
         : width_(other.width_), height_(other.height_), title_(other.title_) {}
-
-    // Оператор присваивания
-    WindowData& operator=(const WindowData& other) {
-        if (this != &other) { // Проверка на самоприсваивание
-            width_ = other.width_;
-            height_ = other.height_;
-            title_ = other.title_;
-        }
-        return *this;
-    }
 };
 
 struct WindowCallbacks{
@@ -61,6 +49,9 @@ class GlfwWindow
 private:
     GLFWwindow* window_ptr_;
 public:
+    GlfwWindow()
+    : window_ptr_(nullptr){} 
+
     GlfwWindow(WindowData winData){
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
@@ -86,7 +77,9 @@ public:
     }
    
     ~GlfwWindow(){
-        glfwDestroyWindow(window_ptr_);
+        if(window_ptr_ != nullptr){
+            glfwDestroyWindow(window_ptr_);
+        }
     }
 };
 
@@ -96,36 +89,24 @@ private:
     GlfwWindow window_;
     
 public:
-    WindowCallbacks callbacks_;
+    WindowCallbacks callbacks;
     
     Window( int width = 800, int height  = 800, const std::string& title = "Vulkan App")
     : window_({width, height, title}){}
     
-    void setCallbacks() {
+    void setCallbacks();
 
-    }
+    vk::raii::SurfaceKHR createSurface(const vk::raii::Instance& instance) const;
+    
+    bool shouldClose() const;
 
-    //TODO работа с ошибками
-    vk::raii::SurfaceKHR createSurface(const vk::raii::Instance& instance){
-        VkSurfaceKHR surface;
-        if (glfwCreateWindowSurface(static_cast<VkInstance>(*instance), *window_, nullptr, &surface) != VK_SUCCESS){
-            throw std::runtime_error("failed to create window surface!");
-        }
-        return vk::raii::SurfaceKHR(instance, surface); 
-    }
-
-    bool shouldClose(){
-        return static_cast<bool>(glfwWindowShouldClose(*window_));
-    }
-
-    std::pair<int, int> getFramebufferSize(){
-        std::pair<int, int> size;
-        glfwGetFramebufferSize(*window_, &size.first, &size.second);
-        return size;
-    }
-
-    void pollEvents(){
-        glfwPollEvents();
-    }  
+    //return <width, height> pair
+    std::pair<int, int> getFramebufferSize() const;
+    
+    //return Vulkan instance extensions required by GLFW
+    std::vector<const char*> getRequiredExtensions() const;
+    
+    void pollEvents() const;
 };
+
 }   
