@@ -8,7 +8,3 @@ void vkHpptestFunc(){
 void EnttTestFunc(){
 
 }
-
-void vkAllocTestFunc(){
-
-}

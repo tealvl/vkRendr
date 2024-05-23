@@ -1,11 +1,32 @@
 #pragma once
+
 #include <vector>
 #include <fstream>
 #include <set>
 #include <string>
 #include <vulkan/vulkan_raii.hpp>
 #include <optional>
+#include <unordered_map>
+#include <limits>
+#include <algorithm>
+#include <glm/glm.hpp>
+
+#include "vertex.hpp"
 #include "window.hpp"
+#include "stb_image.h"
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
+
+namespace std {
+    template<> struct hash<rendr::VertexPCT> {
+        size_t operator()(rendr::VertexPCT const& vertex) const {
+            return ((hash<glm::vec3>()(vertex.pos) ^
+                   (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+                   (hash<glm::vec2>()(vertex.texCoord) << 1);
+        }
+    };
+}
 
 namespace rendr{
 
@@ -14,6 +35,8 @@ const std::vector<const char*> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
+
+//TODO расширить другими типами очередей
 struct QueueFamilyIndices {
 std::optional<uint32_t> graphicsFamily;
 std::optional<uint32_t> presentFamily;
@@ -41,11 +64,77 @@ struct SwapChainData{
     vk::Extent2D swapChainExtent;
 };
 
+struct Image{
+    vk::raii::Image image;
+    vk::raii::DeviceMemory imageMemory;
+    vk::raii::ImageView imageView;
+
+    Image() : image(nullptr), imageMemory(nullptr), imageView(nullptr){}
+};
+
+struct Buffer{
+    vk::raii::Buffer buffer;
+    vk::raii::DeviceMemory bufferMemory;
+    Buffer() : buffer(nullptr), bufferMemory(nullptr){}
+};
+
+class STBImage {
+private:
+    stbi_uc* pixelsDataPtr;
+    int width;
+    int height;
+    int texChannels;
+
+public:
+    STBImage(const std::string& filePath)
+        : pixelsDataPtr(nullptr), width(0), height(0), texChannels(0) {
+        pixelsDataPtr = stbi_load(filePath.c_str(), &width, &height, &texChannels, STBI_rgb_alpha);
+        if (!pixelsDataPtr) {
+            throw std::runtime_error("Failed to load texture image!");
+        }
+    }
+    
+    STBImage(STBImage&& other) noexcept
+        : pixelsDataPtr(other.pixelsDataPtr), width(other.width), height(other.height), texChannels(other.texChannels) {
+        other.pixelsDataPtr = nullptr;
+        other.width = 0;
+        other.height = 0;
+        other.texChannels = 0;
+    }
+
+    STBImage& operator=(STBImage&& other) noexcept {
+        if (this != &other) {
+            std::swap(pixelsDataPtr, other.pixelsDataPtr);
+            std::swap(width, other.width);
+            std::swap(height, other.height);
+            std::swap(texChannels, other.texChannels);
+        }
+        return *this;
+    }
+
+    ~STBImage() {
+        stbi_image_free(pixelsDataPtr);
+    }
+
+    STBImage(const STBImage&) = delete;
+    STBImage& operator=(const STBImage&) = delete;
+
+    stbi_uc* getDataPtr() const { return pixelsDataPtr; }
+    int getWidth() const { return width; }
+    int getHeight() const { return height; }
+    int getTexChannels() const { return texChannels; }
+};
+
 bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+
 bool isPhysicalDeviceSuitable(vk::raii::PhysicalDevice const &device, vk::raii::SurfaceKHR const &surface);
+
 vk::raii::PhysicalDevice pickPhysicalDevice(vk::raii::Instance const &instance, vk::raii::SurfaceKHR const &surface);
-QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);
+
+QueueFamilyIndices findQueueFamilies(const VkPhysicalDevice& device, const VkSurfaceKHR& surface);
+
 SwapChainSupportDetails querySwapChainSupport(vk::raii::PhysicalDevice const &device, vk::raii::SurfaceKHR const &surface);
+
 DeviceWithQueues createDeviceWithQueues(vk::raii::PhysicalDevice const &physicalDevice, vk::raii::SurfaceKHR const &surface);
 
 VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const &availableFormats);
@@ -59,6 +148,50 @@ SwapChainData createSwapChain(vk::raii::PhysicalDevice const &physicalDevice, vk
 vk::raii::ImageView createImageView(vk::raii::Device const &device, vk::Image const &image, vk::Format const &format, vk::ImageAspectFlags aspectFlags);
 
 std::vector<vk::raii::ImageView> createImageViews(std::vector<vk::Image> const &images, vk::raii::Device const &device, vk::Format const &format, vk::ImageAspectFlags aspectFlags);
+
+vk::Format findSupportedFormat(const vk::raii::PhysicalDevice &physicalDevice, std::vector<vk::Format> candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features);
+
+vk::Format findDepthFormat(const vk::raii::PhysicalDevice &physicalDevice);
+
+vk::raii::RenderPass createRenderPass(const vk::raii::Device &device, const std::vector<vk::AttachmentDescription> &attachments, const std::vector<vk::SubpassDescription> &subpasses, const std::vector<vk::SubpassDependency> &dependencies);
+
+vk::raii::RenderPass createRenderPassWithColorAndDepthAttOneSubpass(const vk::raii::Device &device, vk::Format swapChainImageFormat, vk::Format depthFormat);
+
+vk::raii::DescriptorSetLayout createDescriptorSetLayout(const vk::raii::Device &device, std::vector<vk::DescriptorSetLayoutBinding> bindings);
+
+vk::raii::DescriptorSetLayout createUboAndSamplerDescriptorSetLayout(const vk::raii::Device &device);
+
+vk::raii::ShaderModule createShaderModule(const vk::raii::Device &device, const std::vector<char> &code);
+
+vk::raii::PipelineLayout createPipelineLayout(const vk::raii::Device &device, const std::vector<vk::DescriptorSetLayout> &descriptorSetLayouts, const std::vector<vk::PushConstantRange> &pushConstantRanges);
+
+vk::raii::Pipeline createGraphicsPipelineWithDefaults(const vk::raii::Device &device, const vk::raii::RenderPass &renderPass, const vk::raii::PipelineLayout &pipelineLayout, vk::Extent2D swapChainExtent);
+
+uint32_t findMemoryType(vk::raii::PhysicalDevice const &physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties);
+
+rendr::Image createImage(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, vk::MemoryPropertyFlags properties, vk::ImageCreateInfo imageInfo, vk::ImageViewCreateInfo imageViewInfo);
+
+rendr::Image createDepthImage(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, uint32_t width, uint32_t height);
+
+std::vector<vk::raii::Framebuffer> createSwapChainFramebuffersWithDepthAtt(const vk::raii::Device &device, const vk::raii::RenderPass &renderPass, const std::vector<vk::raii::ImageView> &swapChainImageViews, const vk::raii::ImageView &depthImageView, uint32_t width, uint32_t height);
+
+vk::raii::CommandPool createGraphicsCommandPool(const vk::raii::Device &device, const rendr::QueueFamilyIndices &queueFamilyIndices);
+
+rendr::Buffer createBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties);
+
+vk::raii::CommandBuffer beginSingleTimeCommands(const vk::raii::Device &device, const vk::raii::CommandPool &commandPool);
+
+void endSingleTimeCommands(const vk::raii::CommandBuffer &commandBuffer, const vk::raii::Queue &quequeToSubmit);
+
+void writeTransitionImageLayoutBarrier(const vk::raii::CommandBuffer &singleTimeCommandBuffer, const vk::raii::Image &image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+
+void writeCopyBufferToImageCommand(const vk::raii::CommandBuffer &singleTimeCommandBuffer, const vk::raii::Buffer &buffer, const vk::raii::Image &image, uint32_t width, uint32_t height);
+
+Image create2DTextureImage(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandBuffer &singleTimeCommandBuffer, STBImage ImageData);
+
+vk::raii::Sampler createTextureSampler(const vk::raii::Device &device, const vk::raii::PhysicalDevice &physicalDevice);
+
+std::pair<std::vector<VertexPCT>, std::vector<uint32_t>> loadModel(const std::string &filepath);
 
 static std::vector<char> readFile(std::string const &filename)
 {
@@ -75,4 +208,6 @@ static std::vector<char> readFile(std::string const &filename)
 
     return buffer;
 }
+
 }
+

@@ -91,6 +91,14 @@
         "xlocmes": "cpp",
         "xlocmon": "cpp",
         "xloctime": "cpp",
-        "xhash": "cpp"
+        "xhash": "cpp",
+        "cassert": "cpp",
+        "cerrno": "cpp",
+        "cfloat": "cpp",
+        "ciso646": "cpp",
+        "climits": "cpp",
+        "queue": "cpp",
+        "cstdbool": "cpp",
+        "version": "cpp"
     }
 }

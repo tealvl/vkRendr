@@ -23,6 +23,12 @@ struct AppInfo{
     static const uint32_t apiVersion;
 };
 
+
+struct PhisycalDeviceConfig{
+
+};
+
+
 struct DeviceConfig{
     
 };

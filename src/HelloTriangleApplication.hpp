@@ -121,7 +121,16 @@ public:
     graphicsQueue_(nullptr),
     presentQueue_(nullptr),
     swapChain_(nullptr),
-    swapChainImages_()
+    swapChainImages_(),
+    renderPass_(nullptr),
+    descriptorSetLayout_(nullptr),
+    pipelineLayout_(nullptr),
+    graphicsPipeline_(nullptr),
+    depthImage_(),
+    commandPool_(nullptr),
+    textureImage_(),
+    textureSampler_(nullptr),
+    vertexBuffer_()
     {
         instance_ = rendr::Instance(window_);
         surface_ = window_.createSurface(*instance_);
@@ -137,7 +146,29 @@ public:
         swapChainExtent_ = std::move(swapChainData.swapChainExtent);
         swapChainImageFormat_ = std::move(swapChainData.swapChainImageFormat);
         swapChainImages_ = swapChain_.getImages();
-        imageViews_ = rendr::createImageViews(swapChainImages_, device_, swapChainImageFormat_, vk::ImageAspectFlagBits::eColor);
+        swapChainImageViews_ = rendr::createImageViews(swapChainImages_, device_, swapChainImageFormat_, vk::ImageAspectFlagBits::eColor);
+
+        renderPass_ = rendr::createRenderPassWithColorAndDepthAttOneSubpass(device_, swapChainImageFormat_, rendr::findDepthFormat(physicalDevice_));
+        descriptorSetLayout_ = rendr::createUboAndSamplerDescriptorSetLayout(device_);
+        pipelineLayout_ = rendr::createPipelineLayout(device_, {*descriptorSetLayout_}, {});
+        graphicsPipeline_ = rendr::createGraphicsPipelineWithDefaults(device_, renderPass_, pipelineLayout_, swapChainExtent_);
+
+        depthImage_ = rendr::createDepthImage(physicalDevice_, device_, swapChainExtent_.width, swapChainExtent_.height);
+        swapChainFramebuffers_ = rendr::createSwapChainFramebuffersWithDepthAtt(device_, renderPass_, swapChainImageViews_, depthImage_.imageView, swapChainExtent_.width, swapChainExtent_.height);
+        commandPool_ =  rendr::createGraphicsCommandPool(device_, rendr::findQueueFamilies(*physicalDevice_, *surface_));
+        
+        auto vertsAndInds = rendr::loadModel(MODEL_PATH);
+        vertices = std::move(vertsAndInds.first);
+        indices = std::move(vertsAndInds.second);
+
+        textureSampler_ = rendr::createTextureSampler(device_, physicalDevice_);
+        vk::raii::CommandBuffer singleTimeCommandBuffer = rendr::beginSingleTimeCommands(device_, commandPool_);
+            rendr::STBImage imageData(TEXTURE_PATH);
+            textureImage_ = rendr::create2DTextureImage(physicalDevice_, device_, singleTimeCommandBuffer, std::move(imageData));
+        
+        
+        rendr::endSingleTimeCommands(singleTimeCommandBuffer, graphicsQueue_);
+
     }
 
 private:
@@ -145,35 +176,37 @@ private:
     rendr::Window window_;
     
     rendr::Instance instance_; 
-    
     vk::raii::SurfaceKHR surface_;
-    
     vk::raii::PhysicalDevice physicalDevice_;
     vk::raii::Device device_;
-    
+
     vk::raii::Queue graphicsQueue_;
     vk::raii::Queue presentQueue_;
 
     vk::raii::SwapchainKHR swapChain_;
     vk::Format swapChainImageFormat_;
     vk::Extent2D swapChainExtent_;
-
     std::vector<vk::Image> swapChainImages_;
-
-    std::vector<vk::raii::ImageView> imageViews_;
+    std::vector<vk::raii::ImageView> swapChainImageViews_;
     
-    VkRenderPass renderPass;
-    VkPipelineLayout pipelineLayout;
-    VkDescriptorSetLayout descriptorSetLayout;
-    VkPipeline graphicsPipeline;
-    std::vector<VkFramebuffer> swapChainFramebuffers;
-    VkCommandPool commandPool;
+    vk::raii::DescriptorSetLayout descriptorSetLayout_;
+    vk::raii::RenderPass renderPass_;
+    vk::raii::PipelineLayout pipelineLayout_;
+    vk::raii::Pipeline graphicsPipeline_;
+
+    rendr::Image depthImage_;
+
+    std::vector<vk::raii::Framebuffer> swapChainFramebuffers_;
+    vk::raii::CommandPool commandPool_;
+
     std::vector<VkCommandBuffer> commandBuffers;
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
     uint32_t currentFrame = 0;
     bool framebufferResized = false;
+
+    rendr::Buffer vertexBuffer_;
 
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
@@ -188,16 +221,10 @@ private:
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
 
-    VkImage textureImage;
-    VkDeviceMemory textureImageMemory;
-    VkImageView textureImageView;
-    VkSampler textureSampler;
+    rendr::Image textureImage_;
+    vk::raii::Sampler textureSampler_;
 
-    VkImage depthImage;
-    VkDeviceMemory depthImageMemory;
-    VkImageView depthImageView;
-
-    std::vector<Vertex> vertices;
+    std::vector<rendr::VertexPCT> vertices;
     std::vector<uint32_t> indices;
 
     rendr::Camera camera;
@@ -211,11 +238,10 @@ private:
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
     VkImageView createImageView(VkImage image, VkFormat format,VkImageAspectFlags aspectFlags);
-    void createImageViews();
+
     void recreateSwapChain();
     void createGraphicsPipeline();
     VkShaderModule createShaderModule(const std::vector<char> &code);
-    void createRenderPass();
     void createFramebuffers();
     void createCommandPool();
     void createCommandBuffers();
