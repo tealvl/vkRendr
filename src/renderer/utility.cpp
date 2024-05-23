@@ -957,7 +957,7 @@ void writeCopyBufferCommand(const vk::raii::CommandBuffer& singleTimeCommandBuff
 //TODO отвязаться от конкретного типа вершин (сделать функцию шаблонной?)
 //writes copyBuffer command to singleTimeCommandBuffer
 rendr::Buffer createVertexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, 
-    const vk::raii::CommandBuffer& singleTimeCommandBuffer, std::vector<VertexPCT> vertices){
+    const vk::raii::CommandBuffer& singleTimeCommandBuffer, const std::vector<VertexPCT>& vertices){
 
     vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
@@ -979,27 +979,162 @@ rendr::Buffer createVertexBuffer(const vk::raii::PhysicalDevice &physicalDevice,
     return vertexBuffer;
 }
 
+rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, 
+    const vk::raii::CommandBuffer& singleTimeCommandBuffer, const std::vector<uint32_t>& indices){
+    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+    rendr::Buffer stagingBuffer = createBuffer(physicalDevice, device, bufferSize, vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eVertexBuffer, 
+        vk::MemoryPropertyFlagBits::eHostVisible |  vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+
+    void* data = stagingBuffer.bufferMemory.mapMemory(0,bufferSize);
+        memcpy(data, indices.data(), (size_t) bufferSize);
+    stagingBuffer.bufferMemory.unmapMemory();
+
+    rendr::Buffer indexBuffer = createBuffer(physicalDevice, device, bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, 
+        vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+    writeCopyBufferCommand(singleTimeCommandBuffer, stagingBuffer.buffer, indexBuffer.buffer, bufferSize);
+
+    return indexBuffer;
+}
+
+//TODO отвязаться от конкретного типа юниформ буфера (сделать функцию шаблонной?)
+std::vector<rendr::Buffer> createAndMapUniformBuffers(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, 
+    std::vector<void*>& uniformBuffersMappedData, size_t numOfBuffers, MVPUniformBufferObject ubo) {
+    
+    vk::DeviceSize bufferSize = sizeof(ubo);
+    std::vector<rendr::Buffer> uniformBuffers;
+    uniformBuffers.reserve(numOfBuffers);
+    uniformBuffersMappedData.clear();
+    uniformBuffersMappedData.reserve(numOfBuffers);
+
+    for (size_t i = 0; i < numOfBuffers; i++) {
+        uniformBuffers.push_back(createBuffer(physicalDevice, device, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, 
+                                                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent));
+        
+        uniformBuffersMappedData.push_back(uniformBuffers.back().bufferMemory.mapMemory(0, bufferSize));
+    }
+
+    return uniformBuffers;
+}
 
 
+vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device, uint32_t maxFramesInFlight) {
+    std::array<vk::DescriptorPoolSize, 2> poolSizes = {
+        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, maxFramesInFlight),
+        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, maxFramesInFlight)
+    };
+
+    vk::DescriptorPoolCreateInfo poolInfo(
+        {}, // flags
+        maxFramesInFlight, // maxSets
+        static_cast<uint32_t>(poolSizes.size()), // poolSizeCount
+        poolSizes.data() // pPoolSizes
+    );
+
+    return vk::raii::DescriptorPool(device, poolInfo);
+}
+
+//TODO Отвязать от UBO
+std::vector<vk::raii::DescriptorSet> createUboAndSamplerDescriptorSets(
+    const vk::raii::Device& device,  
+    const vk::raii::DescriptorPool& descriptorPool,
+    const vk::raii::DescriptorSetLayout& descriptorSetLayout, 
+    const std::vector<rendr::Buffer>& uniformBuffers,
+    const vk::raii::Sampler& textureSampler,
+    const vk::raii::ImageView& textureImageView,
+    uint32_t maxFramesInFlight, 
+    MVPUniformBufferObject ubo){ 
+
+    std::vector<vk::DescriptorSetLayout> layouts(maxFramesInFlight, *descriptorSetLayout);
+    vk::DescriptorSetAllocateInfo allocInfo(
+        *descriptorPool, // descriptorPool
+        layouts // setLayouts
+    );
+
+    std::vector<vk::raii::DescriptorSet> descriptorSets = device.allocateDescriptorSets(allocInfo);
+
+    for (size_t i = 0; i < maxFramesInFlight; i++) {
+        vk::DescriptorBufferInfo bufferInfo(
+            *uniformBuffers[i].buffer, // buffer
+            0, // offset
+            sizeof(ubo) // range
+        );
+
+        vk::DescriptorImageInfo imageInfo(
+            *textureSampler, // sampler
+            *textureImageView, // imageView
+            vk::ImageLayout::eShaderReadOnlyOptimal // imageLayout
+        );
+
+        std::array<vk::WriteDescriptorSet, 2> descriptorWrites = {
+            vk::WriteDescriptorSet(
+                *descriptorSets[i], // dstSet
+                0, // dstBinding
+                0, // dstArrayElement
+                1, // descriptorCount
+                vk::DescriptorType::eUniformBuffer, // descriptorType
+                nullptr, // pImageInfo
+                &bufferInfo, // pBufferInfo
+                nullptr // pTexelBufferView
+            ),
+            vk::WriteDescriptorSet(
+                *descriptorSets[i], // dstSet
+                1, // dstBinding
+                0, // dstArrayElement
+                1, // descriptorCount
+                vk::DescriptorType::eCombinedImageSampler, // descriptorType
+                &imageInfo, // pImageInfo
+                nullptr, // pBufferInfo
+                nullptr // pTexelBufferView
+            )
+        };
+
+        device.updateDescriptorSets(descriptorWrites, nullptr);
+    }
+
+    return descriptorSets;
+}
 
 
+std::vector<vk::raii::CommandBuffer> createCommandBuffers(const vk::raii::Device& device, const vk::raii::CommandPool& commandPool, uint32_t framesInFlight) {
+    std::vector<vk::raii::CommandBuffer> commandBuffers;
 
+    vk::CommandBufferAllocateInfo allocInfo(
+        *commandPool, // commandPool
+        vk::CommandBufferLevel::ePrimary, // level
+        framesInFlight // commandBufferCount
+    );
 
+    commandBuffers = device.allocateCommandBuffers(allocInfo);
 
+    return commandBuffers;
+}
 
+std::vector<rendr::PerFrameSync> createSyncObjects(const vk::raii::Device& device, uint32_t framesInFlight) {
+    
+    std::vector<rendr::PerFrameSync> syncObjects(framesInFlight);
+    syncObjects.resize(framesInFlight);
 
+    vk::SemaphoreCreateInfo semaphoreInfo(
+        {}, // flags
+        nullptr
+    );
 
+    vk::FenceCreateInfo fenceInfo(
+        vk::FenceCreateFlagBits::eSignaled // flags
+    );
 
+    for (size_t i = 0; i < framesInFlight; i++) {
+        syncObjects[i].imageAvailableSemaphore = vk::raii::Semaphore(device, semaphoreInfo);
+        syncObjects[i].renderFinishedSemaphore = vk::raii::Semaphore(device, semaphoreInfo);
+        syncObjects[i].inFlightFence = vk::raii::Fence(device, fenceInfo);
+    }
 
-
-
-
-
-
-
-
-
-
+    return syncObjects;
+}
 
 
 

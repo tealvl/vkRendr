@@ -35,7 +35,6 @@ const std::vector<const char*> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
-
 //TODO расширить другими типами очередей
 struct QueueFamilyIndices {
 std::optional<uint32_t> graphicsFamily;
@@ -125,6 +124,19 @@ public:
     int getTexChannels() const { return texChannels; }
 };
 
+struct MVPUniformBufferObject {
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
+};
+
+struct PerFrameSync{
+    vk::raii::Semaphore imageAvailableSemaphore;
+    vk::raii::Semaphore renderFinishedSemaphore;
+    vk::raii::Fence inFlightFence;
+    PerFrameSync() : imageAvailableSemaphore(nullptr), renderFinishedSemaphore(nullptr), inFlightFence(nullptr) {}
+};
+
 bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
 bool isPhysicalDeviceSuitable(vk::raii::PhysicalDevice const &device, vk::raii::SurfaceKHR const &surface);
@@ -192,6 +204,22 @@ Image create2DTextureImage(const vk::raii::PhysicalDevice &physicalDevice, const
 vk::raii::Sampler createTextureSampler(const vk::raii::Device &device, const vk::raii::PhysicalDevice &physicalDevice);
 
 std::pair<std::vector<VertexPCT>, std::vector<uint32_t>> loadModel(const std::string &filepath);
+
+void writeCopyBufferCommand(const vk::raii::CommandBuffer &singleTimeCommandBuffer, const vk::raii::Buffer &srcBuffer, const vk::raii::Buffer &dstBuffer, vk::DeviceSize size);
+
+rendr::Buffer createVertexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandBuffer &singleTimeCommandBuffer, const std::vector<VertexPCT>& vertices);
+
+rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandBuffer &singleTimeCommandBuffer, const std::vector<uint32_t> &indices);
+
+std::vector<rendr::Buffer> createAndMapUniformBuffers(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, std::vector<void *> &uniformBuffersMappedData, size_t numOfBuffers, MVPUniformBufferObject ubo);
+
+vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device &device, uint32_t maxFramesInFlight);
+
+std::vector<vk::raii::DescriptorSet> createUboAndSamplerDescriptorSets(const vk::raii::Device &device, const vk::raii::DescriptorPool &descriptorPool, const vk::raii::DescriptorSetLayout &descriptorSetLayout, const std::vector<rendr::Buffer> &uniformBuffers, const vk::raii::Sampler &textureSampler, const vk::raii::ImageView &textureImageView, uint32_t maxFramesInFlight, MVPUniformBufferObject ubo);
+
+std::vector<vk::raii::CommandBuffer> createCommandBuffers(const vk::raii::Device &device, const vk::raii::CommandPool &commandPool, uint32_t framesInFlight);
+
+std::vector<rendr::PerFrameSync> createSyncObjects(const vk::raii::Device &device, uint32_t framesInFlight);
 
 static std::vector<char> readFile(std::string const &filename)
 {

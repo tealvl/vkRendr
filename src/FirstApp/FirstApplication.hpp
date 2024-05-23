@@ -121,7 +121,7 @@ const bool enableValidationLayers = true;
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
-const int MAX_FRAMES_IN_FLIGHT = 2;
+const int FramesInFlight = 2;
 
 
 static std::vector<char> readFile(const std::string& filename) {
