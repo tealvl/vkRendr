@@ -8,6 +8,21 @@ void Application::run(){
 void Application::mainLoop(){
     while (!window_.shouldClose()) {
         window_.pollEvents();
+        timer_.update();
+        
+        //TODO вынести 
+        if(inputManager_.isKeyPressed('Q')){
+            camManip_.enableMouseCameraControl();
+            window_.disableCursor();  
+        }
+        if(inputManager_.isKeyPressed('E')){
+            camManip_.disableMouseCameraControl();
+            window_.enableCursor();
+        }
+
+        camManip_.update(timer_.getDeltaTime());
+        inputManager_.resetInputOffsets();
+
         drawFrame();
     }
     device_.waitIdle();
@@ -41,7 +56,7 @@ void Application::recreateSwapChain() {
         size = window_.getFramebufferSize();
         width = size.first;
         height = size.second;
-        glfwWaitEvents();
+        window_.waitEvents();
     }
 
     device_.waitIdle();
@@ -152,16 +167,16 @@ void Application::drawFrame() {
     currentFrame = (currentFrame + 1) % FramesInFlight;
 }
 
-void Application::updateUniformBuffer(uint32_t currentFrame)
-{
-    //Вынести в логику управления
-    camera.pos = glm::vec3(2.0f, 2.0f, 2.0f);
-    camera.aspect = swapChainExtent_.width / (float) swapChainExtent_.height;
+void Application::updateUniformBuffer(uint32_t currentFrame){
+    camera_.aspect = swapChainExtent_.width / (float) swapChainExtent_.height;
     
     rendr::MVPUniformBufferObject ubo;
-    ubo.model = model_matrix.model_;
-    ubo.view = glm::lookAt(camera.pos, camera.look_at_pos, camera.up);
-    ubo.proj = glm::perspective(camera.fov, camera.aspect , camera.near_plane, camera.far_plane);
+    ubo.model = glm::rotate(model_matrix_.model_, glm::radians(270.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+    ubo.view = glm::lookAt(camera_.pos, camera_.look_at_pos, camera_.worldUp);
+
+    ubo.proj = glm::perspective(camera_.fov, camera_.aspect, camera_.near_plane, camera_.far_plane);
+
     ubo.proj[1][1] *= -1;
 
 

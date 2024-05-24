@@ -99,6 +99,11 @@
         "climits": "cpp",
         "queue": "cpp",
         "cstdbool": "cpp",
-        "version": "cpp"
+        "version": "cpp",
+        "executor": "cpp",
+        "io_context": "cpp",
+        "netfwd": "cpp",
+        "timer": "cpp",
+        "future": "cpp"
     }
 }

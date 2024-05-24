@@ -11,13 +11,15 @@ add_executable(engine
     src/HelloTriangleApplication.cpp
     src/renderer/test.cpp
     src/renderer/window.cpp
-    src/renderer/camera.cpp
     src/renderer/transform.cpp
     src/renderer/instance.cpp
     src/renderer/debug.cpp
     src/renderer/utility.cpp
     src/renderer/device.cpp
     src/renderer/config.cpp
+    src/renderer/inputManager.cpp
+    src/renderer/cameraManipulator.cpp
+    src/renderer/timer.cpp
 )
 
 # Указываем пути к заголовочным файлам 

@@ -32,6 +32,7 @@ struct WindowCallbacks{
     std::function<void(int)> mouseBtnUp = [](int){};
     std::function<void(double, double)> mouseScroll = [](double, double){};
     std::function<void(uint32_t)> charInput = [](uint32_t){};
+    std::function<void(int)> winFocused = [](int){};
 };
 
 struct GlfwContext{
@@ -87,19 +88,29 @@ class Window
 {
 private:
     GlfwWindow window_;
-
+    WindowData data_;
     static void framebufferResizeInternalCallback(GLFWwindow* win, int width, int height);
+    static void keyDownInternalCallback(GLFWwindow* win, int key, int scancode, int action, int mods);
+    static void mouseMovedInternalCallback(GLFWwindow* win, double xpos, double ypos);
+    static void mouseButtonInternalCallback(GLFWwindow* win, int button, int action, int mods);
+    static void mouseScrollInternalCallback(GLFWwindow* win, double xoffset, double yoffset);
+    static void charInputInternalCallback(GLFWwindow* win, unsigned int codepoint);
+    static void windowFocusInternalCallback(GLFWwindow *window, int focused);
+
     void setCallbacks();
 public:
     WindowCallbacks callbacks;
     
     Window( int width = 800, int height  = 800, const std::string& title = "Vulkan App")
     : window_({width, height, title}){
+        data_.height_ = height;
+        data_.width_ = width;
+        data_.title_ = title;
         setCallbacks();
     }
-    
-    vk::raii::SurfaceKHR createSurface(const vk::raii::Instance& instance) const;
-    
+
+    vk::raii::SurfaceKHR createSurface(const vk::raii::Instance &instance) const;
+
     bool shouldClose() const;
 
     //return <width, height> pair
@@ -109,6 +120,10 @@ public:
     std::vector<const char*> getRequiredExtensions() const;
     
     void pollEvents() const;
+    void waitEvents() const;
+
+    void enableCursor();
+    void disableCursor();
 };
 
 }   

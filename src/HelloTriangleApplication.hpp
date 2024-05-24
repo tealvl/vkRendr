@@ -1,5 +1,4 @@
 #pragma once
-
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <optional>
@@ -17,6 +16,7 @@
 #include <tiny_obj_loader.h>
 #include <unordered_map>
 
+
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
@@ -29,6 +29,9 @@
 #include "transform.hpp"
 #include "utility.hpp"
 #include "instance.hpp"
+#include "inputManager.hpp"
+#include "CameraManipulator.hpp"
+#include "timer.hpp"
 
 const std::string MODEL_PATH = "C:/Dev/cpp-projects/engine/resources/models/vikingRoom.obj";
 const std::string TEXTURE_PATH = "C:/Dev/cpp-projects/engine/resources/textures/viking_room.png";
@@ -105,11 +108,17 @@ public:
         );
         commandBuffers_ = rendr::createCommandBuffers(device_, commandPool_, FramesInFlight);
         framesSyncObjs_ = rendr::createSyncObjects(device_, FramesInFlight);
-    
+
+
         window_.callbacks.winResized = [this](int,int){
             this->framebufferResized = true;
             this->recreateSwapChain();
         };
+
+        inputManager_.setUpWindowCallbacks(window_);
+        camManip_.setCamera(camera_);
+        camManip_.setInputManager(inputManager_);
+
     }
 
 private:
@@ -162,8 +171,11 @@ private:
     std::vector<rendr::VertexPCT> vertices;
     std::vector<uint32_t> indices;
 
-    rendr::Camera camera;
-    rendr::Transform model_matrix;
+    rendr::InputManager inputManager_;
+    rendr::CameraManipulator camManip_;
+    rendr::Camera camera_;
+    rendr::Transform model_matrix_;
+    Timer timer_;
     
     void mainLoop();
     void cleanupSwapChain();
