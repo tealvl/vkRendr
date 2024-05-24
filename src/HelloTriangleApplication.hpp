@@ -59,7 +59,8 @@ public:
     textureImage_(),
     textureSampler_(nullptr),
     vertexBuffer_(),
-    descriptorPool_(nullptr)
+    descriptorPool_(nullptr),
+    framebufferResized(false)
     {
         instance_ = rendr::Instance(window_);
         surface_ = window_.createSurface(*instance_);
@@ -92,13 +93,11 @@ public:
 
         textureSampler_ = rendr::createTextureSampler(device_, physicalDevice_);
 
-        vk::raii::CommandBuffer singleTimeCommandBuffer = rendr::beginSingleTimeCommands(device_, commandPool_);
-            rendr::STBImage imageData(TEXTURE_PATH);
-            textureImage_ = rendr::create2DTextureImage(physicalDevice_, device_, singleTimeCommandBuffer, std::move(imageData));
-            vertexBuffer_ = rendr::createVertexBuffer(physicalDevice_, device_, singleTimeCommandBuffer, vertices);
-            indexBuffer_ = rendr::createIndexBuffer(physicalDevice_, device_, singleTimeCommandBuffer, indices);
-        rendr::endSingleTimeCommands(singleTimeCommandBuffer, graphicsQueue_);
-        
+        rendr::STBImage imageData(TEXTURE_PATH);                       
+        textureImage_ = rendr::create2DTextureImage(physicalDevice_, device_, commandPool_, graphicsQueue_, std::move(imageData));
+        vertexBuffer_ = rendr::createVertexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, vertices);
+        indexBuffer_ = rendr::createIndexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, indices);
+
         uniformBuffers_ = rendr::createAndMapUniformBuffers(physicalDevice_, device_, uniformBuffersMapped_, FramesInFlight, rendr::MVPUniformBufferObject());
         descriptorPool_ = rendr::createDescriptorPool(device_, FramesInFlight);
         descriptorSets_ = rendr::createUboAndSamplerDescriptorSets(device_, descriptorPool_, descriptorSetLayout_, uniformBuffers_,
@@ -106,6 +105,11 @@ public:
         );
         commandBuffers_ = rendr::createCommandBuffers(device_, commandPool_, FramesInFlight);
         framesSyncObjs_ = rendr::createSyncObjects(device_, FramesInFlight);
+    
+        window_.callbacks.winResized = [this](int,int){
+            this->framebufferResized = true;
+            this->recreateSwapChain();
+        };
     }
 
 private:
@@ -141,7 +145,7 @@ private:
     std::vector<rendr::PerFrameSync> framesSyncObjs_;
 
     uint32_t currentFrame = 0;
-    bool framebufferResized = false;
+    bool framebufferResized;
 
     rendr::Buffer vertexBuffer_;
     rendr::Buffer indexBuffer_;
@@ -162,10 +166,9 @@ private:
     rendr::Transform model_matrix;
     
     void mainLoop();
-    void cleanup();
     void cleanupSwapChain();
     void recreateSwapChain();
-    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void recordCommandBuffer(const vk::raii::CommandBuffer &commandBuffer, uint32_t imageIndex);
     void drawFrame();
     void updateUniformBuffer(uint32_t currentImage);
 };

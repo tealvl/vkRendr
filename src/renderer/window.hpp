@@ -87,15 +87,17 @@ class Window
 {
 private:
     GlfwWindow window_;
-    
+
+    static void framebufferResizeInternalCallback(GLFWwindow* win, int width, int height);
+    void setCallbacks();
 public:
     WindowCallbacks callbacks;
     
     Window( int width = 800, int height  = 800, const std::string& title = "Vulkan App")
-    : window_({width, height, title}){}
+    : window_({width, height, title}){
+        setCallbacks();
+    }
     
-    void setCallbacks();
-
     vk::raii::SurfaceKHR createSurface(const vk::raii::Instance& instance) const;
     
     bool shouldClose() const;

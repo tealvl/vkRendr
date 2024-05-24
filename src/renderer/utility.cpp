@@ -740,7 +740,8 @@ vk::raii::CommandBuffer beginSingleTimeCommands(const vk::raii::Device &device, 
         vk::CommandBufferLevel::ePrimary,
         1
     );
-    vk::raii::CommandBuffers buffers(device, buffAllocInfo);
+
+    std::vector<vk::raii::CommandBuffer> buffers = device.allocateCommandBuffers(buffAllocInfo);
     vk::raii::CommandBuffer buffer = std::move(buffers[0]);
 
     vk::CommandBufferBeginInfo beginInfo(
@@ -751,10 +752,12 @@ vk::raii::CommandBuffer beginSingleTimeCommands(const vk::raii::Device &device, 
     return buffer;
 }
 
-void endSingleTimeCommands(const vk::raii::CommandBuffer& commandBuffer, const vk::raii::Queue& quequeToSubmit ) {
+void endSingleTimeCommands(const vk::raii::CommandBuffer& commandBuffer, const vk::raii::Queue& queueToSubmit ) {
     commandBuffer.end();
-    vk::SubmitInfo submitInfo({},{}, *commandBuffer);
-    quequeToSubmit.submit({submitInfo});
+
+    vk::SubmitInfo submitInfo({}, {}, *commandBuffer);
+    queueToSubmit.submit({ submitInfo });
+    queueToSubmit.waitIdle();
 }
 
 void writeTransitionImageLayoutBarrier(const vk::raii::CommandBuffer& singleTimeCommandBuffer, const vk::raii::Image& image, vk::Format format,
@@ -804,7 +807,8 @@ void writeTransitionImageLayoutBarrier(const vk::raii::CommandBuffer& singleTime
     );
 }
     
-void writeCopyBufferToImageCommand(const vk::raii::CommandBuffer& singleTimeCommandBuffer, const vk::raii::Buffer& buffer, const vk::raii::Image& image, uint32_t width, uint32_t height) {
+void writeCopyBufferToImageCommand(const vk::raii::CommandBuffer& singleTimeCommandBuffer, vk::raii::Buffer& buffer, 
+    const vk::raii::Image& image, uint32_t width, uint32_t height) {
     vk::BufferImageCopy region(
         0, // bufferOffset
         0, // bufferRowLength
@@ -827,10 +831,13 @@ void writeCopyBufferToImageCommand(const vk::raii::CommandBuffer& singleTimeComm
     );
 }
 
-//writes commands | TransitionImageLayoutBarr | CopyBufferToImage | TransitionImageLayoutBarr | to singleTimeCommandBuffer
-Image create2DTextureImage(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, 
-    const vk::raii::CommandBuffer& singleTimeCommandBuffer, STBImage ImageData){
-
+Image create2DTextureImage(
+    const vk::raii::PhysicalDevice &physicalDevice, 
+    const vk::raii::Device &device, 
+    const vk::raii::CommandPool& commandPool,
+    const vk::raii::Queue& graphicsQueue,
+    STBImage ImageData){
+    
     vk::DeviceSize imageSize = ImageData.getWidth() * ImageData.getHeight() * 4;
 
     rendr::Buffer stagingBuffer = createBuffer(physicalDevice, device, imageSize, vk::BufferUsageFlagBits::eTransferSrc,
@@ -867,16 +874,23 @@ Image create2DTextureImage(const vk::raii::PhysicalDevice &physicalDevice, const
 
     rendr::Image textureImage = createImage(physicalDevice, device, vk::MemoryPropertyFlagBits::eDeviceLocal, imageCreateInfo, imageViewCreateInfo);
      
-    writeTransitionImageLayoutBarrier(singleTimeCommandBuffer, textureImage.image, vk::Format::eR8G8B8A8Srgb, 
-        vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    vk::raii::CommandBuffer singleTimeCommandBuffer = rendr::beginSingleTimeCommands(device, commandPool);
+        writeTransitionImageLayoutBarrier(singleTimeCommandBuffer, textureImage.image, vk::Format::eR8G8B8A8Srgb, 
+            vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    rendr::endSingleTimeCommands(singleTimeCommandBuffer, graphicsQueue);
 
-    writeCopyBufferToImageCommand(singleTimeCommandBuffer, stagingBuffer.buffer, textureImage.image, ImageData.getWidth(), ImageData.getHeight());
+    singleTimeCommandBuffer = rendr::beginSingleTimeCommands(device, commandPool);
+        writeCopyBufferToImageCommand(singleTimeCommandBuffer, stagingBuffer.buffer, textureImage.image, ImageData.getWidth(), ImageData.getHeight());
+    rendr::endSingleTimeCommands(singleTimeCommandBuffer, graphicsQueue);
 
-    writeTransitionImageLayoutBarrier(singleTimeCommandBuffer, textureImage.image, vk::Format::eR8G8B8A8Srgb, 
-        vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-
+    singleTimeCommandBuffer = rendr::beginSingleTimeCommands(device, commandPool);
+        writeTransitionImageLayoutBarrier(singleTimeCommandBuffer, textureImage.image, vk::Format::eR8G8B8A8Srgb, 
+            vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+    rendr::endSingleTimeCommands(singleTimeCommandBuffer, graphicsQueue);
+    
     return textureImage;
 }
+
 
 vk::raii::Sampler createTextureSampler(const vk::raii::Device& device, const vk::raii::PhysicalDevice& physicalDevice) {
     vk::PhysicalDeviceProperties properties = physicalDevice.getProperties();
@@ -948,16 +962,18 @@ std::pair<std::vector<VertexPCT>, std::vector<uint32_t>>  loadModel(const std::s
     return {std::move(vertices), std::move(indices)};
 }
 
-
 void writeCopyBufferCommand(const vk::raii::CommandBuffer& singleTimeCommandBuffer, const vk::raii::Buffer& srcBuffer, const vk::raii::Buffer& dstBuffer, vk::DeviceSize size) {
     std::vector<vk::BufferCopy> copyRegions = {vk::BufferCopy(0,0,size)};
-    singleTimeCommandBuffer.copyBuffer(*srcBuffer, *dstBuffer, std::move(copyRegions));
+    singleTimeCommandBuffer.copyBuffer(*srcBuffer, *dstBuffer, copyRegions);
 }
 
 //TODO отвязаться от конкретного типа вершин (сделать функцию шаблонной?)
-//writes copyBuffer command to singleTimeCommandBuffer
-rendr::Buffer createVertexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, 
-    const vk::raii::CommandBuffer& singleTimeCommandBuffer, const std::vector<VertexPCT>& vertices){
+rendr::Buffer createVertexBuffer(
+    const vk::raii::PhysicalDevice &physicalDevice, 
+    const vk::raii::Device &device,
+    const vk::raii::CommandPool& commandPool,
+    const vk::raii::Queue& graphicsQueue, 
+    const std::vector<VertexPCT>& vertices){
 
     vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
@@ -974,13 +990,19 @@ rendr::Buffer createVertexBuffer(const vk::raii::PhysicalDevice &physicalDevice,
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
 
-    writeCopyBufferCommand(singleTimeCommandBuffer, stagingBuffer.buffer, vertexBuffer.buffer, bufferSize);
-
+    vk::raii::CommandBuffer singleTimeCommandBuffer = rendr::beginSingleTimeCommands(device, commandPool);
+        writeCopyBufferCommand(singleTimeCommandBuffer, stagingBuffer.buffer, vertexBuffer.buffer, bufferSize);
+    rendr::endSingleTimeCommands(singleTimeCommandBuffer, graphicsQueue);
+    
     return vertexBuffer;
 }
 
-rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, 
-    const vk::raii::CommandBuffer& singleTimeCommandBuffer, const std::vector<uint32_t>& indices){
+rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, 
+    const vk::raii::Device &device,
+    const vk::raii::CommandPool& commandPool,
+    const vk::raii::Queue& graphicsQueue,
+    const std::vector<uint32_t>& indices){
+
     vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
     rendr::Buffer stagingBuffer = createBuffer(physicalDevice, device, bufferSize, vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eVertexBuffer, 
@@ -995,8 +1017,10 @@ rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, 
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
 
-    writeCopyBufferCommand(singleTimeCommandBuffer, stagingBuffer.buffer, indexBuffer.buffer, bufferSize);
-
+    vk::raii::CommandBuffer singleTimeCommandBuffer = rendr::beginSingleTimeCommands(device, commandPool);
+        writeCopyBufferCommand(singleTimeCommandBuffer, stagingBuffer.buffer, indexBuffer.buffer, bufferSize);
+    rendr::endSingleTimeCommands(singleTimeCommandBuffer, graphicsQueue);
+    
     return indexBuffer;
 }
 
@@ -1028,7 +1052,7 @@ vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device, ui
     };
 
     vk::DescriptorPoolCreateInfo poolInfo(
-        {}, // flags
+        {vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet}, // flags
         maxFramesInFlight, // maxSets
         static_cast<uint32_t>(poolSizes.size()), // poolSizeCount
         poolSizes.data() // pPoolSizes

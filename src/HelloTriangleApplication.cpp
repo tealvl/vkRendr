@@ -1,13 +1,8 @@
 #include "HelloTriangleApplication.hpp"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
 
 void Application::run(){
     mainLoop();
-    cleanup();
 }
 
 void Application::mainLoop(){
@@ -18,57 +13,27 @@ void Application::mainLoop(){
     device_.waitIdle();
 }
 
-void Application::cleanup(){
-    vkDestroyBuffer(*device_, indexBuffer, nullptr);
-    vkFreeMemory(*device_, indexBufferMemory, nullptr);
-
-    vkDestroyBuffer(*device_, vertexBuffer, nullptr);
-    vkFreeMemory(*device_, vertexBufferMemory, nullptr);
-    
-    cleanupSwapChain();
-    vkDestroySampler(*device_, textureSampler, nullptr);
-    vkDestroyImageView(*device_, textureImageView, nullptr);
-    vkDestroyImage(*device_, textureImage, nullptr);
-    vkFreeMemory(*device_, textureImageMemory, nullptr);
-
-    vkDestroyDescriptorSetLayout(*device_, descriptorSetLayout, nullptr);
-    vkDestroyDescriptorPool(*device_, descriptorPool, nullptr);
-
-    for (size_t i = 0; i < FramesInFlight; i++) {
-        vkDestroyBuffer(*device_, uniformBuffers[i], nullptr);
-        vkFreeMemory(*device_, uniformBuffersMemory[i], nullptr);
+void Application::cleanupSwapChain() {
+    // Освобождаем framebuffers
+    for (auto& framebuffer : swapChainFramebuffers_) {
+        framebuffer.clear();
     }
 
-    for (size_t i = 0; i < FramesInFlight; i++) {
-        vkDestroySemaphore(*device_, renderFinishedSemaphores[i], nullptr);
-        vkDestroySemaphore(*device_, imageAvailableSemaphores[i], nullptr);
-        vkDestroyFence(*device_, inFlightFences[i], nullptr);
+    // Освобождаем depth image
+    depthImage_.imageView.clear();
+    depthImage_.image.clear();
+    depthImage_.imageMemory.clear();
+
+    // Освобождаем image views
+    for (auto& imageView : swapChainImageViews_) {
+        imageView.clear();
     }
-    vkDestroyCommandPool(*device_, commandPool, nullptr);
-    vkDestroyPipeline(*device_, graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(*device_, pipelineLayout, nullptr);
-    vkDestroyRenderPass(*device_, renderPass, nullptr);
+
+    // Освобождаем swap chain
+    swapChain_.clear();
 }
 
-void Application::cleanupSwapChain(){
-
-    vkDestroyImageView(*device_, depthImageView, nullptr);
-    vkDestroyImage(*device_, depthImage, nullptr);
-    vkFreeMemory(*device_, depthImageMemory, nullptr);
-
-    for (size_t i = 0; i < swapChainFramebuffers.size(); i++) {
-        vkDestroyFramebuffer(*device_, swapChainFramebuffers[i], nullptr);
-    }
-
-    for (size_t i = 0; i < swapChainImageViews.size(); i++) {
-        vkDestroyImageView(*device_, swapChainImageViews[i], nullptr);
-    }
-
-    vkDestroySwapchainKHR(*device_, swapChain_, nullptr);
-}
-
-void Application::recreateSwapChain()
-{
+void Application::recreateSwapChain() {
     auto size = window_.getFramebufferSize();
     int width = size.first;
     int height = size.second;
@@ -79,160 +44,126 @@ void Application::recreateSwapChain()
         glfwWaitEvents();
     }
 
-    vkDeviceWaitIdle(*device_);
+    device_.waitIdle();
 
     cleanupSwapChain();
 
+    rendr::SwapChainData swapChainData = rendr::createSwapChain(physicalDevice_, surface_, device_, window_);
+    swapChain_ = std::move(swapChainData.swapChain);
+    swapChainExtent_ = std::move(swapChainData.swapChainExtent);
+    swapChainImageFormat_ = std::move(swapChainData.swapChainImageFormat);
+    swapChainImages_ = swapChain_.getImages();
+    swapChainImageViews_ = rendr::createImageViews(swapChainImages_, device_, swapChainImageFormat_, vk::ImageAspectFlagBits::eColor);
 
-    //createSwapChain();
-    createImageViews();
-    createDepthResources();
-    createFramebuffers();
+    depthImage_ = rendr::createDepthImage(physicalDevice_, device_, swapChainExtent_.width, swapChainExtent_.height);
+    swapChainFramebuffers_ = rendr::createSwapChainFramebuffersWithDepthAtt(device_, renderPass_, swapChainImageViews_, depthImage_.imageView, swapChainExtent_.width, swapChainExtent_.height);
+}    
+
+void Application::recordCommandBuffer(const vk::raii::CommandBuffer& commandBuffer, uint32_t imageIndex) {
+    vk::CommandBufferBeginInfo beginInfo(
+        {}, // flags
+        nullptr // pInheritanceInfo
+    );
+
+    commandBuffer.begin(beginInfo);
+
+    std::array<vk::ClearValue, 2> clearValues{};
+    clearValues[0].color = std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f};
+    clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+
+    vk::RenderPassBeginInfo renderPassInfo(
+        *renderPass_, // renderPass
+        *swapChainFramebuffers_[imageIndex], // framebuffer
+        vk::Rect2D({0, 0}, swapChainExtent_), // renderArea
+        clearValues // clearValues
+    );
+
+    commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline_);
+
+    vk::Viewport viewport(
+        0.0f, 0.0f,
+        static_cast<float>(swapChainExtent_.width),
+        static_cast<float>(swapChainExtent_.height),
+        0.0f, 1.0f
+    );
+    commandBuffer.setViewport(0, viewport);
+
+    vk::Rect2D scissor({0, 0}, swapChainExtent_);
+    commandBuffer.setScissor(0, scissor);
+
+    commandBuffer.bindVertexBuffers(0, *vertexBuffer_.buffer, {0});
+    commandBuffer.bindIndexBuffer(*indexBuffer_.buffer, 0, vk::IndexType::eUint32);
+
+    commandBuffer.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        *pipelineLayout_,
+        0,
+        *descriptorSets_[currentFrame],
+        nullptr
+    );
+
+    commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+    commandBuffer.endRenderPass();
+
+    commandBuffer.end();
 }
 
-void Application::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-{
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = 0; 
-    beginInfo.pInheritanceInfo = nullptr; 
-
-    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-        throw std::runtime_error("failed to begin recording command buffer!");
-    }
-
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = renderPass;
-    renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = swapChainExtent;
-
-    std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
-
-    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-    renderPassInfo.pClearValues = clearValues.data();
-
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+void Application::drawFrame() {
     
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(swapChainExtent.width);
-    viewport.height = static_cast<float>(swapChainExtent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    vk::Result waitFanceRes = device_.waitForFences({*framesSyncObjs_[currentFrame].inFlightFence}, VK_TRUE, UINT64_MAX);
 
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = swapChainExtent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    std::pair<vk::Result, uint32_t> imageAcqRes = swapChain_.acquireNextImage(UINT64_MAX, 
+        *framesSyncObjs_[currentFrame].imageAvailableSemaphore, nullptr);
 
-    VkBuffer vertexBuffers[] = {vertexBuffer};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
-
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
-    vkCmdEndRenderPass(commandBuffer);
-
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-        throw std::runtime_error("failed to record command buffer!");
-    }
-
-}
-
-void Application::drawFrame()
-{
-    vkWaitForFences(*device_, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-
-    uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(*device_, swapChain_, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
-
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        recreateSwapChain();
-        return;
-    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-        throw std::runtime_error("failed to acquire swap chain image!");
-    }
+    uint32_t imageIndex = imageAcqRes.second;
 
     updateUniformBuffer(currentFrame);
+
+    device_.resetFences({*framesSyncObjs_[currentFrame].inFlightFence});
+
+    commandBuffers_[currentFrame].reset();
+    recordCommandBuffer(commandBuffers_[currentFrame], imageIndex);
+
+    vk::PipelineStageFlags waitStages = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+
+    vk::SubmitInfo submitInfo(
+        1, // waitSemaphoreCount
+        &(*framesSyncObjs_[currentFrame].imageAvailableSemaphore), // pWaitSemaphores
+        &waitStages, // pWaitDstStageMask
+        1, // commandBufferCount
+        &(*commandBuffers_[currentFrame]), // pCommandBuffers
+        1, // signalSemaphoreCount
+        &(*framesSyncObjs_[currentFrame].renderFinishedSemaphore) // pSignalSemaphores
+    );
+
+    graphicsQueue_.submit({submitInfo}, *framesSyncObjs_[currentFrame].inFlightFence);
+
+    vk::PresentInfoKHR presentInfo(
+        1, // waitSemaphoreCount
+        &(*framesSyncObjs_[currentFrame].renderFinishedSemaphore), // pWaitSemaphores
+        1, // swapchainCount
+        &(*swapChain_), // pSwapchains
+        &imageIndex // pImageIndices
+    );
     
-    vkResetFences(*device_, 1, &inFlightFences[currentFrame]);
-
-    vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-    recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
-
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
-    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
-    
-    VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signalSemaphores;
-
-    if (vkQueueSubmit(*graphicsQueue_, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
-        throw std::runtime_error("failed to submit draw command buffer!");
-    }   
-
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = signalSemaphores;
-    VkSwapchainKHR swapChains[] = {swapChain_};
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = swapChains;
-    presentInfo.pImageIndices = &imageIndex;
-    presentInfo.pResults = nullptr; 
-    
-    result = vkQueuePresentKHR(*presentQueue_, &presentInfo);
-
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
-        framebufferResized = false;
-        recreateSwapChain();
-    } else if (result != VK_SUCCESS) {
-        throw std::runtime_error("failed to present swap chain image!");
-    }
+    vk::Result presenrRes = presentQueue_.presentKHR(presentInfo);
 
     currentFrame = (currentFrame + 1) % FramesInFlight;
 }
 
-void Application::updateUniformBuffer(uint32_t currentImage)
+void Application::updateUniformBuffer(uint32_t currentFrame)
 {
-    // static auto startTime = std::chrono::high_resolution_clock::now();
-    // auto currentTime = std::chrono::high_resolution_clock::now();
-    // float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-    // UniformBufferObject ubo{};
-    // ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-
-    // ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-
-    // ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
-    // ubo.proj[1][1] *= -1;
-
-    // memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
-
-    UniformBufferObject ubo{};
-    ubo.model = model_matrix.model_;
+    //Вынести в логику управления
     camera.pos = glm::vec3(2.0f, 2.0f, 2.0f);
-    ubo.view = glm::lookAt(camera.pos, camera.look_at_pos, camera.up);
     camera.aspect = swapChainExtent_.width / (float) swapChainExtent_.height;
+    
+    rendr::MVPUniformBufferObject ubo;
+    ubo.model = model_matrix.model_;
+    ubo.view = glm::lookAt(camera.pos, camera.look_at_pos, camera.up);
     ubo.proj = glm::perspective(camera.fov, camera.aspect , camera.near_plane, camera.far_plane);
     ubo.proj[1][1] *= -1;
 
-    memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+
+    memcpy(uniformBuffersMapped_[currentFrame], &ubo, sizeof(ubo));
 }

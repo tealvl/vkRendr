@@ -26,8 +26,13 @@ bool Window::shouldClose() const{
     return static_cast<bool>(glfwWindowShouldClose(*window_));
 }
 
-void Window::setCallbacks()
-{
+void Window::setCallbacks(){
+    glfwSetFramebufferSizeCallback(*window_, framebufferResizeInternalCallback);
+}
+
+void Window::framebufferResizeInternalCallback(GLFWwindow* win, int width, int height){
+    auto thisWindow = reinterpret_cast<Window*>(glfwGetWindowUserPointer(win));
+    thisWindow->callbacks.winResized(width, height);
 }
 
 vk::raii::SurfaceKHR Window::createSurface(const vk::raii::Instance &instance) const{

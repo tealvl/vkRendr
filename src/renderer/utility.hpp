@@ -5,6 +5,7 @@
 #include <set>
 #include <string>
 #include <vulkan/vulkan_raii.hpp>
+
 #include <optional>
 #include <unordered_map>
 #include <limits>
@@ -64,16 +65,16 @@ struct SwapChainData{
 };
 
 struct Image{
-    vk::raii::Image image;
-    vk::raii::DeviceMemory imageMemory;
     vk::raii::ImageView imageView;
+    vk::raii::DeviceMemory imageMemory;
+    vk::raii::Image image;
 
     Image() : image(nullptr), imageMemory(nullptr), imageView(nullptr){}
 };
 
-struct Buffer{
-    vk::raii::Buffer buffer;
+struct Buffer{   
     vk::raii::DeviceMemory bufferMemory;
+    vk::raii::Buffer buffer;
     Buffer() : buffer(nullptr), bufferMemory(nullptr){}
 };
 
@@ -193,13 +194,13 @@ rendr::Buffer createBuffer(const vk::raii::PhysicalDevice &physicalDevice, const
 
 vk::raii::CommandBuffer beginSingleTimeCommands(const vk::raii::Device &device, const vk::raii::CommandPool &commandPool);
 
-void endSingleTimeCommands(const vk::raii::CommandBuffer &commandBuffer, const vk::raii::Queue &quequeToSubmit);
+void endSingleTimeCommands(const vk::raii::CommandBuffer &commandBuffer, const vk::raii::Queue &queueToSubmit);
 
 void writeTransitionImageLayoutBarrier(const vk::raii::CommandBuffer &singleTimeCommandBuffer, const vk::raii::Image &image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
 
 void writeCopyBufferToImageCommand(const vk::raii::CommandBuffer &singleTimeCommandBuffer, const vk::raii::Buffer &buffer, const vk::raii::Image &image, uint32_t width, uint32_t height);
 
-Image create2DTextureImage(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandBuffer &singleTimeCommandBuffer, STBImage ImageData);
+Image create2DTextureImage(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandPool &commandPool, const vk::raii::Queue &graphicsQueue, STBImage ImageData);
 
 vk::raii::Sampler createTextureSampler(const vk::raii::Device &device, const vk::raii::PhysicalDevice &physicalDevice);
 
@@ -207,9 +208,9 @@ std::pair<std::vector<VertexPCT>, std::vector<uint32_t>> loadModel(const std::st
 
 void writeCopyBufferCommand(const vk::raii::CommandBuffer &singleTimeCommandBuffer, const vk::raii::Buffer &srcBuffer, const vk::raii::Buffer &dstBuffer, vk::DeviceSize size);
 
-rendr::Buffer createVertexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandBuffer &singleTimeCommandBuffer, const std::vector<VertexPCT>& vertices);
+rendr::Buffer createVertexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandPool &commandPool, const vk::raii::Queue &graphicsQueue, const std::vector<VertexPCT> &vertices);
 
-rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandBuffer &singleTimeCommandBuffer, const std::vector<uint32_t> &indices);
+rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandPool &commandPool, const vk::raii::Queue &graphicsQueue, const std::vector<uint32_t> &indices);
 
 std::vector<rendr::Buffer> createAndMapUniformBuffers(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, std::vector<void *> &uniformBuffersMappedData, size_t numOfBuffers, MVPUniformBufferObject ubo);
 
