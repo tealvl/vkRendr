@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.26)
 
-project(engine VERSION 0.1 LANGUAGES CXX)
+project(engine VERSION 0.1 LANGUAGES C CXX)
 
 add_subdirectory(dependencies/Vulkan-Hpp)
 add_subdirectory(dependencies/Vulkan-Hpp/glm)
@@ -20,6 +20,7 @@ add_executable(engine
     src/renderer/inputManager.cpp
     src/renderer/cameraManipulator.cpp
     src/renderer/timer.cpp
+    dependencies/ufbx/ufbx.c
 )
 
 # Указываем пути к заголовочным файлам 
@@ -31,8 +32,7 @@ target_include_directories(engine
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer
     PRIVATE dependencies/stb
     PRIVATE dependencies/tinyobjloader
-
-
+    PRIVATE dependencies/ufbx
 )
 
 # Указываем путь к исходникам

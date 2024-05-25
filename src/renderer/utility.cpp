@@ -346,17 +346,17 @@ vk::raii::DescriptorSetLayout createDescriptorSetLayout(
 
 vk::raii::DescriptorSetLayout createUboAndSamplerDescriptorSetLayout(const vk::raii::Device& device) {
     vk::DescriptorSetLayoutBinding uboLayoutBinding(
-        0,
+        0, // binding
         vk::DescriptorType::eUniformBuffer,
-        1,
+        1, // descriptorCount
         vk::ShaderStageFlagBits::eVertex,
         nullptr
     );
 
     vk::DescriptorSetLayoutBinding samplerLayoutBinding(
-        1,
+        1,  // binding
         vk::DescriptorType::eCombinedImageSampler,
-        1,
+        1, // descriptorCount
         vk::ShaderStageFlagBits::eFragment,
         nullptr
     );
@@ -391,202 +391,6 @@ vk::raii::PipelineLayout createPipelineLayout(
 
     return vk::raii::PipelineLayout(device, pipelineLayoutInfo);
 }
-
-vk::raii::Pipeline createGraphicsPipeline(
-    const vk::raii::Device& device,
-    const vk::raii::PipelineLayout& pipelineLayout,
-    const vk::raii::RenderPass& renderPass,
-    const std::vector<vk::PipelineShaderStageCreateInfo>& shaderStages,
-    const vk::PipelineVertexInputStateCreateInfo& vertexInputInfo,
-    const vk::PipelineInputAssemblyStateCreateInfo& inputAssembly,
-    const vk::PipelineViewportStateCreateInfo& viewportState,
-    const vk::PipelineRasterizationStateCreateInfo& rasterizer,
-    const vk::PipelineMultisampleStateCreateInfo& multisampling,
-    const vk::PipelineColorBlendStateCreateInfo& colorBlending,
-    const vk::PipelineDepthStencilStateCreateInfo& depthStencil,
-    const vk::PipelineDynamicStateCreateInfo& dynamicState) {
-
-    vk::GraphicsPipelineCreateInfo pipelineInfo(
-        {}, // flags
-        static_cast<uint32_t>(shaderStages.size()), // stageCount
-        shaderStages.data(), // pStages
-        &vertexInputInfo, // pVertexInputState
-        &inputAssembly, // pInputAssemblyState
-        nullptr, // pTessellationState
-        &viewportState, // pViewportState
-        &rasterizer, // pRasterizationState
-        &multisampling, // pMultisampleState
-        &depthStencil, // pDepthStencilState
-        &colorBlending, // pColorBlendState
-        &dynamicState, // pDynamicState
-        *pipelineLayout, // layout
-        *renderPass, // renderPass
-        0, // subpass
-        vk::Pipeline(), // basePipelineHandle
-        -1 // basePipelineIndex
-    );
-
-    return vk::raii::Pipeline(device, nullptr, pipelineInfo);
-}
-
-vk::raii::Pipeline createGraphicsPipelineWithDefaults(
-    const vk::raii::Device& device,
-    const vk::raii::RenderPass& renderPass,
-    const vk::raii::PipelineLayout& pipelineLayout,
-    vk::Extent2D swapChainExtent) {
-
-    std::vector<char> vertShaderCode = rendr::readFile("C:/Dev/cpp-projects/engine/src/shaders/fvertex.spv");
-    std::vector<char> fragShaderCode = rendr::readFile("C:/Dev/cpp-projects/engine/src/shaders/ffragment.spv");
-
-    vk::raii::ShaderModule vertShaderModule = rendr::createShaderModule(device, vertShaderCode);
-    vk::raii::ShaderModule fragShaderModule = rendr::createShaderModule(device, fragShaderCode);
-
-    vk::PipelineShaderStageCreateInfo vertShaderStageInfo(
-        {}, // flags
-        vk::ShaderStageFlagBits::eVertex, // stage
-        *vertShaderModule, // module
-        "main" // pName
-    );
-
-    vk::PipelineShaderStageCreateInfo fragShaderStageInfo(
-        {}, // flags
-        vk::ShaderStageFlagBits::eFragment, // stage
-        *fragShaderModule, // module
-        "main" // pName
-    );
-
-    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { vertShaderStageInfo, fragShaderStageInfo };
-
-    auto bindingDescription = VertexPCT::getBindingDescription();
-    auto attributeDescriptions = VertexPCT::getAttributeDescriptions();
-
-    vk::PipelineVertexInputStateCreateInfo vertexInputInfo(
-        {}, // flags
-        1, // vertexBindingDescriptionCount
-        &bindingDescription, // pVertexBindingDescriptions
-        static_cast<uint32_t>(attributeDescriptions.size()), // vertexAttributeDescriptionCount
-        attributeDescriptions.data() // pVertexAttributeDescriptions
-    );
-
-    vk::PipelineInputAssemblyStateCreateInfo inputAssembly(
-        {}, // flags
-        vk::PrimitiveTopology::eTriangleList, // topology
-        VK_FALSE // primitiveRestartEnable
-    );
-
-    vk::Viewport viewport(
-        0.0f, // x
-        0.0f, // y
-        static_cast<float>(swapChainExtent.width), // width
-        static_cast<float>(swapChainExtent.height), // height
-        0.0f, // minDepth
-        1.0f // maxDepth
-    );
-
-    vk::Rect2D scissor({ 0, 0 }, swapChainExtent); // offset, extent
-
-    vk::PipelineViewportStateCreateInfo viewportState(
-        {}, // flags
-        1, // viewportCount
-        &viewport, // pViewports
-        1, // scissorCount
-        &scissor // pScissors
-    );
-
-    vk::PipelineRasterizationStateCreateInfo rasterizer(
-        {}, // flags
-        VK_FALSE, // depthClampEnable
-        VK_FALSE, // rasterizerDiscardEnable
-        vk::PolygonMode::eFill, // polygonMode
-        vk::CullModeFlagBits::eBack, // cullMode
-        vk::FrontFace::eCounterClockwise, // frontFace
-        VK_FALSE, // depthBiasEnable
-        0.0f, // depthBiasConstantFactor
-        0.0f, // depthBiasClamp
-        0.0f, // depthBiasSlopeFactor
-        1.0f // lineWidth
-    );
-
-    vk::PipelineMultisampleStateCreateInfo multisampling(
-        {}, // flags
-        vk::SampleCountFlagBits::e1, // rasterizationSamples
-        VK_FALSE, // sampleShadingEnable
-        1.0f, // minSampleShading
-        nullptr, // pSampleMask
-        VK_FALSE, // alphaToCoverageEnable
-        VK_FALSE // alphaToOneEnable
-    );
-
-    vk::PipelineColorBlendAttachmentState colorBlendAttachment(
-        VK_FALSE, // blendEnable
-        vk::BlendFactor::eOne, // srcColorBlendFactor
-        vk::BlendFactor::eZero, // dstColorBlendFactor
-        vk::BlendOp::eAdd, // colorBlendOp
-        vk::BlendFactor::eOne, // srcAlphaBlendFactor
-        vk::BlendFactor::eZero, // dstAlphaBlendFactor
-        vk::BlendOp::eAdd, // alphaBlendOp
-        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA // colorWriteMask
-    );
-
-    vk::PipelineColorBlendStateCreateInfo colorBlending(
-        {}, // flags
-        VK_FALSE, // logicOpEnable
-        vk::LogicOp::eCopy, // logicOp
-        1, // attachmentCount
-        &colorBlendAttachment, // pAttachments
-        { 0.0f, 0.0f, 0.0f, 0.0f } // blendConstants
-    );
-
-    vk::StencilOpState stencilOpState(
-        vk::StencilOp::eKeep, // failOp
-        vk::StencilOp::eKeep, // passOp
-        vk::StencilOp::eKeep, // depthFailOp
-        vk::CompareOp::eAlways, // compareOp
-        0, // compareMask
-        0, // writeMask
-        0 // reference
-    );
-
-    vk::PipelineDepthStencilStateCreateInfo depthStencil(
-        {}, // flags
-        VK_TRUE, // depthTestEnable
-        VK_TRUE, // depthWriteEnable
-        vk::CompareOp::eLess, // depthCompareOp
-        VK_FALSE, // depthBoundsTestEnable
-        VK_FALSE, // stencilTestEnable
-        stencilOpState, // front
-        stencilOpState, // back
-        0.0f, // minDepthBounds
-        1.0f // maxDepthBounds
-    );
-
-    std::vector<vk::DynamicState> dynamicStates = {
-        vk::DynamicState::eViewport,
-        vk::DynamicState::eScissor
-    };
-
-    vk::PipelineDynamicStateCreateInfo dynamicState(
-        {}, // flags
-        static_cast<uint32_t>(dynamicStates.size()), // dynamicStateCount
-        dynamicStates.data() // pDynamicStates
-    );
-
-    return createGraphicsPipeline(
-        device,
-        pipelineLayout,
-        renderPass,
-        shaderStages,
-        vertexInputInfo,
-        inputAssembly,
-        viewportState,
-        rasterizer,
-        multisampling,
-        colorBlending,
-        depthStencil,
-        dynamicState
-    );
-}
-
 
 uint32_t findMemoryType(vk::raii::PhysicalDevice const & physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
     vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
@@ -724,7 +528,7 @@ rendr::Buffer createBuffer(const vk::raii::PhysicalDevice &physicalDevice, const
     vk::MemoryRequirements memRequirements = buffer.buffer.getMemoryRequirements();
 
     vk::MemoryAllocateInfo memAllocInfo(
-        size,
+        std::max(size, memRequirements.size),
         findMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties)
     );
 
@@ -836,7 +640,7 @@ Image create2DTextureImage(
     const vk::raii::Device &device, 
     const vk::raii::CommandPool& commandPool,
     const vk::raii::Queue& graphicsQueue,
-    STBImage ImageData){
+    STBImageRaii ImageData){
     
     vk::DeviceSize imageSize = ImageData.getWidth() * ImageData.getHeight() * 4;
 
@@ -890,6 +694,7 @@ Image create2DTextureImage(
     
     return textureImage;
 }
+
 
 
 vk::raii::Sampler createTextureSampler(const vk::raii::Device& device, const vk::raii::PhysicalDevice& physicalDevice) {
@@ -962,39 +767,91 @@ std::pair<std::vector<VertexPCT>, std::vector<uint32_t>>  loadModel(const std::s
     return {std::move(vertices), std::move(indices)};
 }
 
+
+std::pair<rendr::Mesh<VertexPTN>, uint32_t> convertUfbxMeshPart(ufbx_mesh *mesh, ufbx_mesh_part *part) {
+    std::vector<VertexPTN> vertices;
+    std::vector<uint32_t> tri_indices;
+    tri_indices.resize(mesh->max_face_triangles * 3);
+
+    for (uint32_t face_index : part->face_indices) {
+        ufbx_face face = mesh->faces[face_index];
+
+        uint32_t num_tris = ufbx_triangulate_face(tri_indices.data(), tri_indices.size(), mesh, face);
+
+        for (size_t i = 0; i < num_tris * 3; i++) {
+            uint32_t index = tri_indices[i];
+
+            VertexPTN vertex;
+            vertex.pos = glm::vec3(mesh->vertex_position[index].x, mesh->vertex_position[index].y, mesh->vertex_position[index].z);
+
+            if (mesh->vertex_normal.exists) {
+                vertex.normal = glm::vec3(mesh->vertex_normal[index].x, mesh->vertex_normal[index].y, mesh->vertex_normal[index].z);
+            } else {
+                vertex.normal = glm::vec3(0.0f, 0.0f, 0.0f); 
+            }
+
+            if (mesh->vertex_uv.exists) {
+                vertex.texCoord = glm::vec2(mesh->vertex_uv[index].x, 1.0f - mesh->vertex_uv[index].y);
+            } else {
+                vertex.texCoord = glm::vec2(0.0f, 0.0f); 
+            }
+            vertices.push_back(std::move(vertex));
+        }
+    }
+
+    assert(vertices.size() == part->num_triangles * 3);
+
+    ufbx_vertex_stream streams[1] = {
+        { vertices.data(), vertices.size(), sizeof(VertexPTN) },
+    };
+
+    std::vector<uint32_t> indices;
+    indices.resize(part->num_triangles * 3);
+
+    size_t num_vertices = ufbx_generate_indices(streams, 1, indices.data(), indices.size(), nullptr, nullptr);
+
+    vertices.resize(num_vertices);
+
+    uint32_t material_index = mesh->face_material[part->face_indices[0]];
+
+    return {{std::move(vertices), std::move(indices)}, material_index};
+}
+
+ufbx_scene* ufbxOpenScene(const std::string& filepath) {
+    ufbx_load_opts opts = { 0 }; 
+    ufbx_error error; 
+    ufbx_scene *scene = ufbx_load_file(filepath.data(), &opts, &error);
+    if (!scene) {
+        throw(std::runtime_error(error.info));
+    }
+    return scene;
+}
+
+void ufbxCloseScene(ufbx_scene* scene_ptr){
+    ufbx_free_scene(scene_ptr);
+}
+
+std::vector<std::pair<rendr::Mesh<VertexPTN>, uint32_t>> ufbxLoadMeshesPartsSepByMaterial(ufbx_scene* scene) {
+
+    std::vector<std::pair<rendr::Mesh<VertexPTN>, uint32_t>> meshesParts;
+    // Перебираем все меши
+    for (size_t i = 0; i < scene->meshes.count; i++) {
+        ufbx_mesh* mesh = scene->meshes.data[i];
+
+        // Перебираем все части меша с одним материалом
+        for (size_t j = 0; j < mesh->material_parts.count; j++) {
+            ufbx_mesh_part* part = &mesh->material_parts.data[j];
+            if(part->num_faces == 0) continue;
+            meshesParts.push_back(convertUfbxMeshPart(mesh, part));
+        }
+    } 
+
+    return meshesParts;
+}
+
 void writeCopyBufferCommand(const vk::raii::CommandBuffer& singleTimeCommandBuffer, const vk::raii::Buffer& srcBuffer, const vk::raii::Buffer& dstBuffer, vk::DeviceSize size) {
     std::vector<vk::BufferCopy> copyRegions = {vk::BufferCopy(0,0,size)};
     singleTimeCommandBuffer.copyBuffer(*srcBuffer, *dstBuffer, copyRegions);
-}
-
-//TODO отвязаться от конкретного типа вершин (сделать функцию шаблонной?)
-rendr::Buffer createVertexBuffer(
-    const vk::raii::PhysicalDevice &physicalDevice, 
-    const vk::raii::Device &device,
-    const vk::raii::CommandPool& commandPool,
-    const vk::raii::Queue& graphicsQueue, 
-    const std::vector<VertexPCT>& vertices){
-
-    vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-
-    rendr::Buffer stagingBuffer = createBuffer(physicalDevice, device, bufferSize, vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eVertexBuffer, 
-        vk::MemoryPropertyFlagBits::eHostVisible |  vk::MemoryPropertyFlagBits::eHostCoherent
-    );
-
-    void* data = stagingBuffer.bufferMemory.mapMemory(0,bufferSize);
-        memcpy(data, vertices.data(), (size_t) bufferSize);
-    stagingBuffer.bufferMemory.unmapMemory();
-
-
-    rendr::Buffer vertexBuffer = createBuffer(physicalDevice, device, bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, 
-        vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-
-    vk::raii::CommandBuffer singleTimeCommandBuffer = rendr::beginSingleTimeCommands(device, commandPool);
-        writeCopyBufferCommand(singleTimeCommandBuffer, stagingBuffer.buffer, vertexBuffer.buffer, bufferSize);
-    rendr::endSingleTimeCommands(singleTimeCommandBuffer, graphicsQueue);
-    
-    return vertexBuffer;
 }
 
 rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, 
@@ -1009,7 +866,7 @@ rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice,
         vk::MemoryPropertyFlagBits::eHostVisible |  vk::MemoryPropertyFlagBits::eHostCoherent
     );
 
-    void* data = stagingBuffer.bufferMemory.mapMemory(0,bufferSize);
+    void* data = stagingBuffer.bufferMemory.mapMemory(0, bufferSize);
         memcpy(data, indices.data(), (size_t) bufferSize);
     stagingBuffer.bufferMemory.unmapMemory();
 

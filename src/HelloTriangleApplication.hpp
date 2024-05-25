@@ -73,7 +73,7 @@ public:
         device_ = std::move(deviceAndQueues.device);
         graphicsQueue_ = std::move(deviceAndQueues.graphicsQueue);
         presentQueue_ = std::move(deviceAndQueues.presentQueue);
-        
+
         rendr::SwapChainData swapChainData = rendr::createSwapChain(physicalDevice_, surface_, device_, window_);
         swapChain_ = std::move(swapChainData.swapChain);
         swapChainExtent_ = std::move(swapChainData.swapChainExtent);
@@ -84,20 +84,44 @@ public:
         renderPass_ = rendr::createRenderPassWithColorAndDepthAttOneSubpass(device_, swapChainImageFormat_, rendr::findDepthFormat(physicalDevice_));
         descriptorSetLayout_ = rendr::createUboAndSamplerDescriptorSetLayout(device_);
         pipelineLayout_ = rendr::createPipelineLayout(device_, {*descriptorSetLayout_}, {});
-        graphicsPipeline_ = rendr::createGraphicsPipelineWithDefaults(device_, renderPass_, pipelineLayout_, swapChainExtent_);
+
+        std::vector<char> vertShaderCode = rendr::readFile("C:/Dev/cpp-projects/engine/src/shaders/fvertex.spv");
+        std::vector<char> fragShaderCode = rendr::readFile("C:/Dev/cpp-projects/engine/src/shaders/ffragment.spv");
+        vk::raii::ShaderModule vertShaderModule = rendr::createShaderModule(device_, vertShaderCode);
+        vk::raii::ShaderModule fragShaderModule = rendr::createShaderModule(device_, fragShaderCode);
+
+        graphicsPipeline_ = rendr::createGraphicsPipelineWithDefaults(device_, renderPass_, pipelineLayout_, swapChainExtent_, rendr::VertexPTN{},
+            vertShaderModule, fragShaderModule
+        );
 
         depthImage_ = rendr::createDepthImage(physicalDevice_, device_, swapChainExtent_.width, swapChainExtent_.height);
         swapChainFramebuffers_ = rendr::createSwapChainFramebuffersWithDepthAtt(device_, renderPass_, swapChainImageViews_, depthImage_.imageView, swapChainExtent_.width, swapChainExtent_.height);
         commandPool_ =  rendr::createGraphicsCommandPool(device_, rendr::findQueueFamilies(*physicalDevice_, *surface_));
         
-        auto vertsAndInds = rendr::loadModel(MODEL_PATH);
-        vertices = std::move(vertsAndInds.first);
-        indices = std::move(vertsAndInds.second);
-
         textureSampler_ = rendr::createTextureSampler(device_, physicalDevice_);
 
-        rendr::STBImage imageData(TEXTURE_PATH);                       
-        textureImage_ = rendr::create2DTextureImage(physicalDevice_, device_, commandPool_, graphicsQueue_, std::move(imageData));
+        rendr::UfbxSceneRaii fbxScene("C:/Dev/cpp-projects/engine/resources/zen-studio/source/zen_studio.fbx");
+
+        auto meshesAndMatInd = rendr::ufbxLoadMeshesPartsSepByMaterial(fbxScene.get());
+
+        rendr::STBImageRaii walls("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_walls_baked.png");  
+        rendr::STBImageRaii details("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_details_Baked.png");  
+        rendr::Image wallsTextureImage = rendr::create2DTextureImage(physicalDevice_, device_, commandPool_, graphicsQueue_, std::move(walls));
+        rendr::Image detailsTextureImage = rendr::create2DTextureImage(physicalDevice_, device_, commandPool_, graphicsQueue_, std::move(details));
+        
+        //std::vector<rendr::Image> wallsImages{std::move(wallsTextureImage)};
+        //std::vector<rendr::Image> detailsImages{std::move(detailsTextureImage)};
+
+        //rendr::Material wallsMat {0, std::move(wallsImages), {}};
+        //rendr::Material detailsMat {0, std::move(detailsImages), {}};
+
+        //std::vector<rendr::Material> materials{wallsMat, detailsMat};
+        //std::vector<rendr::Batch> batchs;
+        
+        vertices = meshesAndMatInd[0].first.vertices;
+        indices = meshesAndMatInd[0].first.indices;
+
+        textureImage_ = rendr::create2DTextureImage(physicalDevice_, device_, commandPool_, graphicsQueue_, std::move(walls));
         vertexBuffer_ = rendr::createVertexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, vertices);
         indexBuffer_ = rendr::createIndexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, indices);
 
@@ -118,6 +142,7 @@ public:
         inputManager_.setUpWindowCallbacks(window_);
         camManip_.setCamera(camera_);
         camManip_.setInputManager(inputManager_);
+
 
     }
 
@@ -168,7 +193,7 @@ private:
     rendr::Image textureImage_;
     vk::raii::Sampler textureSampler_;
 
-    std::vector<rendr::VertexPCT> vertices;
+    std::vector<rendr::VertexPTN> vertices;
     std::vector<uint32_t> indices;
 
     rendr::InputManager inputManager_;
