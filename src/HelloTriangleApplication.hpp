@@ -100,35 +100,48 @@ public:
         
         textureSampler_ = rendr::createTextureSampler(device_, physicalDevice_);
 
+
         rendr::UfbxSceneRaii fbxScene("C:/Dev/cpp-projects/engine/resources/zen-studio/source/zen_studio.fbx");
-
-        auto meshesAndMatInd = rendr::ufbxLoadMeshesPartsSepByMaterial(fbxScene.get());
-
+        auto meshesAndMatInd = rendr::ufbxLoadMeshesPartsSepByMaterial(fbxScene.get());  
+        auto matToMesh = rendr::mergeMeshesByMaterial(meshesAndMatInd);
+        
+        meshesAndMatInd.clear();
         rendr::STBImageRaii walls("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_walls_baked.png");  
         rendr::STBImageRaii details("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_details_Baked.png");  
         rendr::Image wallsTextureImage = rendr::create2DTextureImage(physicalDevice_, device_, commandPool_, graphicsQueue_, std::move(walls));
         rendr::Image detailsTextureImage = rendr::create2DTextureImage(physicalDevice_, device_, commandPool_, graphicsQueue_, std::move(details));
-        
-        //std::vector<rendr::Image> wallsImages{std::move(wallsTextureImage)};
-        //std::vector<rendr::Image> detailsImages{std::move(detailsTextureImage)};
+        rendr::SimpleMaterial wallsMat (0, std::move(wallsTextureImage));
+        rendr::SimpleMaterial detailsMat (2, std::move(detailsTextureImage));
 
-        //rendr::Material wallsMat {0, std::move(wallsImages), {}};
-        //rendr::Material detailsMat {0, std::move(detailsImages), {}};
+        simpleMaterials_.push_back(std::move(wallsMat));
+        simpleMaterials_.push_back(std::move(detailsMat));
+        singleSimpleMatMeshes_.push_back(std::move(matToMesh[0]));
+        singleSimpleMatMeshes_.push_back(std::move(matToMesh[2]));
 
-        //std::vector<rendr::Material> materials{wallsMat, detailsMat};
-        //std::vector<rendr::Batch> batchs;
-        
-        vertices = meshesAndMatInd[0].first.vertices;
-        indices = meshesAndMatInd[0].first.indices;
 
-        textureImage_ = rendr::create2DTextureImage(physicalDevice_, device_, commandPool_, graphicsQueue_, std::move(walls));
-        vertexBuffer_ = rendr::createVertexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, vertices);
-        indexBuffer_ = rendr::createIndexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, indices);
+        batches_.push_back(
+        rendr::Batch(
+            rendr::createVertexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, singleSimpleMatMeshes_[0].vertices),
+            rendr::createIndexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, singleSimpleMatMeshes_[0].indices),
+            &simpleMaterials_[0]
+        ));
+        batches_.push_back(
+        rendr::Batch(
+            rendr::createVertexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, singleSimpleMatMeshes_[1].vertices),
+            rendr::createIndexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, singleSimpleMatMeshes_[1].indices),
+            &simpleMaterials_[1]
+        ));
+       
+        // vertices = meshesAndMatInd[0].first.vertices;
+        // indices = meshesAndMatInd[0].first.indices;
+        // textureImage_ = rendr::create2DTextureImage(physicalDevice_, device_, commandPool_, graphicsQueue_, std::move(walls));
+        // vertexBuffer_ = rendr::createVertexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, vertices);
+        // indexBuffer_ = rendr::createIndexBuffer(physicalDevice_, device_, commandPool_, graphicsQueue_, indices);
 
         uniformBuffers_ = rendr::createAndMapUniformBuffers(physicalDevice_, device_, uniformBuffersMapped_, FramesInFlight, rendr::MVPUniformBufferObject());
-        descriptorPool_ = rendr::createDescriptorPool(device_, FramesInFlight);
+        descriptorPool_ = rendr::createDescriptorPool(device_, FramesInFlight, batches_.size());
         descriptorSets_ = rendr::createUboAndSamplerDescriptorSets(device_, descriptorPool_, descriptorSetLayout_, uniformBuffers_,
-            textureSampler_, textureImage_.imageView, FramesInFlight, rendr::MVPUniformBufferObject()
+            textureSampler_, FramesInFlight, batches_, rendr::MVPUniformBufferObject()
         );
         commandBuffers_ = rendr::createCommandBuffers(device_, commandPool_, FramesInFlight);
         framesSyncObjs_ = rendr::createSyncObjects(device_, FramesInFlight);
@@ -142,8 +155,6 @@ public:
         inputManager_.setUpWindowCallbacks(window_);
         camManip_.setCamera(camera_);
         camManip_.setInputManager(inputManager_);
-
-
     }
 
 private:
@@ -188,7 +199,7 @@ private:
     std::vector<void*> uniformBuffersMapped_;
 
     vk::raii::DescriptorPool descriptorPool_;
-    std::vector<vk::raii::DescriptorSet> descriptorSets_;
+    std::vector<std::vector<vk::raii::DescriptorSet>> descriptorSets_;
     
     rendr::Image textureImage_;
     vk::raii::Sampler textureSampler_;
@@ -196,6 +207,9 @@ private:
     std::vector<rendr::VertexPTN> vertices;
     std::vector<uint32_t> indices;
 
+    std::vector<rendr::SimpleMaterial> simpleMaterials_;
+    std::vector<rendr::Mesh<rendr::VertexPTN>> singleSimpleMatMeshes_;
+    std::vector<rendr::Batch<rendr::SimpleMaterial>> batches_;
     rendr::InputManager inputManager_;
     rendr::CameraManipulator camManip_;
     rendr::Camera camera_;

@@ -768,7 +768,7 @@ std::pair<std::vector<VertexPCT>, std::vector<uint32_t>>  loadModel(const std::s
 }
 
 
-std::pair<rendr::Mesh<VertexPTN>, uint32_t> convertUfbxMeshPart(ufbx_mesh *mesh, ufbx_mesh_part *part) {
+rendr::Mesh<VertexPTN> convertUfbxMeshPart(ufbx_mesh *mesh, ufbx_mesh_part *part, ufbx_matrix* transformMat) {
     std::vector<VertexPTN> vertices;
     std::vector<uint32_t> tri_indices;
     tri_indices.resize(mesh->max_face_triangles * 3);
@@ -782,10 +782,14 @@ std::pair<rendr::Mesh<VertexPTN>, uint32_t> convertUfbxMeshPart(ufbx_mesh *mesh,
             uint32_t index = tri_indices[i];
 
             VertexPTN vertex;
-            vertex.pos = glm::vec3(mesh->vertex_position[index].x, mesh->vertex_position[index].y, mesh->vertex_position[index].z);
+            ufbx_vec3 pos = mesh->vertex_position[index];
+            ufbx_vec3 transformedPos = ufbx_transform_position(transformMat, pos);
 
+
+            vertex.pos = glm::vec3(transformedPos.x, transformedPos.y, transformedPos.z);
+            
             if (mesh->vertex_normal.exists) {
-                vertex.normal = glm::vec3(mesh->vertex_normal[index].x, mesh->vertex_normal[index].y, mesh->vertex_normal[index].z);
+                vertex.normal = glm::vec3(pos.x, pos.y, pos.z);
             } else {
                 vertex.normal = glm::vec3(0.0f, 0.0f, 0.0f); 
             }
@@ -812,13 +816,13 @@ std::pair<rendr::Mesh<VertexPTN>, uint32_t> convertUfbxMeshPart(ufbx_mesh *mesh,
 
     vertices.resize(num_vertices);
 
-    uint32_t material_index = mesh->face_material[part->face_indices[0]];
 
-    return {{std::move(vertices), std::move(indices)}, material_index};
+    return {std::move(vertices), std::move(indices)};
 }
 
-ufbx_scene* ufbxOpenScene(const std::string& filepath) {
-    ufbx_load_opts opts = { 0 }; 
+ufbx_scene* ufbxOpenScene(const std::string& filepath, bool blender_flag = true) {
+
+    ufbx_load_opts opts = { 0 };
     ufbx_error error; 
     ufbx_scene *scene = ufbx_load_file(filepath.data(), &opts, &error);
     if (!scene) {
@@ -834,15 +838,29 @@ void ufbxCloseScene(ufbx_scene* scene_ptr){
 std::vector<std::pair<rendr::Mesh<VertexPTN>, uint32_t>> ufbxLoadMeshesPartsSepByMaterial(ufbx_scene* scene) {
 
     std::vector<std::pair<rendr::Mesh<VertexPTN>, uint32_t>> meshesParts;
-    // Перебираем все меши
-    for (size_t i = 0; i < scene->meshes.count; i++) {
-        ufbx_mesh* mesh = scene->meshes.data[i];
+    for (size_t i = 0; i < scene->nodes.count; i++) {
+        ufbx_node* node = scene->nodes.data[i];
 
-        // Перебираем все части меша с одним материалом
-        for (size_t j = 0; j < mesh->material_parts.count; j++) {
-            ufbx_mesh_part* part = &mesh->material_parts.data[j];
-            if(part->num_faces == 0) continue;
-            meshesParts.push_back(convertUfbxMeshPart(mesh, part));
+        if (node->mesh) {
+            ufbx_mesh* mesh = node->mesh;
+            ufbx_matrix meshTransform = node->geometry_to_world;
+            
+            for (size_t j = 0; j < mesh->material_parts.count; j++) {
+                ufbx_mesh_part* part = &mesh->material_parts.data[j];
+                
+                if(part->num_faces == 0) continue;   
+
+                uint32_t sceneMatIndex;
+                uint32_t partFaceIndex = part->face_indices[0];
+                uint32_t matInMeshIndex = mesh->face_material[partFaceIndex];
+                
+                for(size_t k = 0; k < scene->materials.count; k++){
+                    if(!strcmp(mesh->materials[matInMeshIndex]->name.data, scene->materials[k]->name.data)){
+                        sceneMatIndex = k;
+                    }
+                }                                     
+                meshesParts.push_back({convertUfbxMeshPart(mesh, part, &meshTransform), sceneMatIndex});
+            }
         }
     } 
 
@@ -902,81 +920,20 @@ std::vector<rendr::Buffer> createAndMapUniformBuffers(const vk::raii::PhysicalDe
 }
 
 
-vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device, uint32_t maxFramesInFlight) {
+vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device, uint32_t maxFramesInFlight, uint32_t batchCount) {
     std::array<vk::DescriptorPoolSize, 2> poolSizes = {
-        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, maxFramesInFlight),
-        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, maxFramesInFlight)
+        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, maxFramesInFlight * batchCount),
+        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, maxFramesInFlight * batchCount)
     };
 
     vk::DescriptorPoolCreateInfo poolInfo(
         {vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet}, // flags
-        maxFramesInFlight, // maxSets
+        maxFramesInFlight * batchCount, // maxSets
         static_cast<uint32_t>(poolSizes.size()), // poolSizeCount
         poolSizes.data() // pPoolSizes
     );
 
     return vk::raii::DescriptorPool(device, poolInfo);
-}
-
-//TODO Отвязать от UBO
-std::vector<vk::raii::DescriptorSet> createUboAndSamplerDescriptorSets(
-    const vk::raii::Device& device,  
-    const vk::raii::DescriptorPool& descriptorPool,
-    const vk::raii::DescriptorSetLayout& descriptorSetLayout, 
-    const std::vector<rendr::Buffer>& uniformBuffers,
-    const vk::raii::Sampler& textureSampler,
-    const vk::raii::ImageView& textureImageView,
-    uint32_t maxFramesInFlight, 
-    MVPUniformBufferObject ubo){ 
-
-    std::vector<vk::DescriptorSetLayout> layouts(maxFramesInFlight, *descriptorSetLayout);
-    vk::DescriptorSetAllocateInfo allocInfo(
-        *descriptorPool, // descriptorPool
-        layouts // setLayouts
-    );
-
-    std::vector<vk::raii::DescriptorSet> descriptorSets = device.allocateDescriptorSets(allocInfo);
-
-    for (size_t i = 0; i < maxFramesInFlight; i++) {
-        vk::DescriptorBufferInfo bufferInfo(
-            *uniformBuffers[i].buffer, // buffer
-            0, // offset
-            sizeof(ubo) // range
-        );
-
-        vk::DescriptorImageInfo imageInfo(
-            *textureSampler, // sampler
-            *textureImageView, // imageView
-            vk::ImageLayout::eShaderReadOnlyOptimal // imageLayout
-        );
-
-        std::array<vk::WriteDescriptorSet, 2> descriptorWrites = {
-            vk::WriteDescriptorSet(
-                *descriptorSets[i], // dstSet
-                0, // dstBinding
-                0, // dstArrayElement
-                1, // descriptorCount
-                vk::DescriptorType::eUniformBuffer, // descriptorType
-                nullptr, // pImageInfo
-                &bufferInfo, // pBufferInfo
-                nullptr // pTexelBufferView
-            ),
-            vk::WriteDescriptorSet(
-                *descriptorSets[i], // dstSet
-                1, // dstBinding
-                0, // dstArrayElement
-                1, // descriptorCount
-                vk::DescriptorType::eCombinedImageSampler, // descriptorType
-                &imageInfo, // pImageInfo
-                nullptr, // pBufferInfo
-                nullptr // pTexelBufferView
-            )
-        };
-
-        device.updateDescriptorSets(descriptorWrites, nullptr);
-    }
-
-    return descriptorSets;
 }
 
 
@@ -1016,7 +973,5 @@ std::vector<rendr::PerFrameSync> createSyncObjects(const vk::raii::Device& devic
 
     return syncObjects;
 }
-
-
 
 }

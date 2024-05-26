@@ -12,6 +12,7 @@
 #include <limits>
 #include <algorithm>
 #include <glm/glm.hpp>
+#include <map>
 
 #include "vertex.hpp"
 #include "window.hpp"
@@ -238,8 +239,7 @@ vk::raii::Sampler createTextureSampler(const vk::raii::Device &device, const vk:
 
 std::pair<std::vector<VertexPCT>, std::vector<uint32_t>> loadModel(const std::string &filepath);
 
-
-ufbx_scene *ufbxOpenScene(const std::string &filepath);
+ufbx_scene *ufbxOpenScene(const std::string &filepath, bool blenderFlag);
 
 void ufbxCloseScene(ufbx_scene *scene_ptr);
 
@@ -251,9 +251,7 @@ rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, 
 
 std::vector<rendr::Buffer> createAndMapUniformBuffers(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, std::vector<void *> &uniformBuffersMappedData, size_t numOfBuffers, MVPUniformBufferObject ubo);
 
-vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device &device, uint32_t maxFramesInFlight);
-
-std::vector<vk::raii::DescriptorSet> createUboAndSamplerDescriptorSets(const vk::raii::Device &device, const vk::raii::DescriptorPool &descriptorPool, const vk::raii::DescriptorSetLayout &descriptorSetLayout, const std::vector<rendr::Buffer> &uniformBuffers, const vk::raii::Sampler &textureSampler, const vk::raii::ImageView &textureImageView, uint32_t maxFramesInFlight, MVPUniformBufferObject ubo);
+vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device &device, uint32_t maxFramesInFlight, uint32_t batchCount);
 
 std::vector<vk::raii::CommandBuffer> createCommandBuffers(const vk::raii::Device &device, const vk::raii::CommandPool &commandPool, uint32_t framesInFlight);
 
@@ -275,6 +273,7 @@ static std::vector<char> readFile(std::string const &filename)
     return buffer;
 }
 
+//concept
 template<typename VertexType>
 rendr::Buffer createVertexBuffer(
     const vk::raii::PhysicalDevice &physicalDevice, 
@@ -343,7 +342,7 @@ inline vk::raii::Pipeline createGraphicsPipeline(
     return vk::raii::Pipeline(device, nullptr, pipelineInfo);
 }
 
-
+//concept
 template<typename VertexType>
 vk::raii::Pipeline createGraphicsPipelineWithDefaults(
     const vk::raii::Device& device,
@@ -497,6 +496,115 @@ vk::raii::Pipeline createGraphicsPipelineWithDefaults(
         depthStencil,
         dynamicState
     );
+}
+
+template<typename VertexType>
+std::map<uint32_t, rendr::Mesh<VertexType>> mergeMeshesByMaterial(const std::vector<std::pair<rendr::Mesh<VertexType>, uint32_t>>& meshesAndMatInd) {
+    
+    std::map<uint32_t, rendr::Mesh<VertexType>> materialToMesh;
+
+    // Подсчет общего количества вершин и индексов для каждого материала
+    std::map<uint32_t, size_t> materialVertexCount;
+    std::map<uint32_t, size_t> materialIndexCount;
+    for (const auto& meshMatPair : meshesAndMatInd) {
+        uint32_t materialIndex = meshMatPair.second;
+        materialVertexCount[materialIndex] += meshMatPair.first.vertices.size();
+        materialIndexCount[materialIndex] += meshMatPair.first.indices.size();
+    }
+
+    // Резервирование памяти
+    for (const auto& entry : materialVertexCount) {
+        materialToMesh[entry.first].vertices.reserve(entry.second);
+    }
+    for (const auto& entry : materialIndexCount) {
+        materialToMesh[entry.first].indices.reserve(entry.second);
+    }
+
+    // Объединение вершин и индексов по материалам
+    for (const auto& meshMatPair : meshesAndMatInd) {
+        const auto& mesh = meshMatPair.first;
+        uint32_t materialIndex = meshMatPair.second;
+
+        auto& meshData = materialToMesh[materialIndex];
+        auto vertexOffset = meshData.vertices.size();
+
+        meshData.vertices.insert(meshData.vertices.end(), mesh.vertices.begin(), mesh.vertices.end());
+
+        // Обновление индексов с учетом смещения
+        for (auto index : mesh.indices) {
+            meshData.indices.push_back(index + vertexOffset);
+        }
+    }
+
+    return materialToMesh;
+}
+
+
+template<typename MaterialType>
+std::vector<std::vector<vk::raii::DescriptorSet>> createUboAndSamplerDescriptorSets(
+    const vk::raii::Device& device,  
+    const vk::raii::DescriptorPool& descriptorPool,
+    const vk::raii::DescriptorSetLayout& descriptorSetLayout, 
+    const std::vector<rendr::Buffer>& uniformBuffers, 
+    const vk::raii::Sampler& textureSampler,
+    uint32_t maxFramesInFlight, 
+    const std::vector<rendr::Batch<MaterialType>>& batches,
+    MVPUniformBufferObject ubo){ 
+
+   std::vector<std::vector<vk::raii::DescriptorSet>> allDescriptorSets(maxFramesInFlight);
+
+    for (uint32_t frameIndex = 0; frameIndex < maxFramesInFlight; ++frameIndex) {
+        std::vector<vk::DescriptorSetLayout> layouts(batches.size(), *descriptorSetLayout);
+        vk::DescriptorSetAllocateInfo allocInfo(
+            *descriptorPool, // descriptorPool
+            layouts // setLayouts
+        );
+
+        std::vector<vk::raii::DescriptorSet> descriptorSets = device.allocateDescriptorSets(allocInfo);
+        allDescriptorSets[frameIndex] = std::move(descriptorSets);
+
+        for (size_t batchIndex = 0; batchIndex < batches.size(); ++batchIndex) {
+            const auto& batch = batches[batchIndex];
+
+            vk::DescriptorBufferInfo bufferInfo(
+                *uniformBuffers[frameIndex].buffer, // buffer
+                0, // offset
+                sizeof(ubo) // range
+            );
+
+            vk::DescriptorImageInfo imageInfo(
+                *textureSampler, // sampler
+                *(batch.materialPtr->colorTexture.imageView),
+                vk::ImageLayout::eShaderReadOnlyOptimal // imageLayout
+            );
+
+            std::array<vk::WriteDescriptorSet, 2> descriptorWrites = {
+                vk::WriteDescriptorSet(
+                    *allDescriptorSets[frameIndex][batchIndex], // dstSet
+                    0, // dstBinding
+                    0, // dstArrayElement
+                    1, // descriptorCount
+                    vk::DescriptorType::eUniformBuffer, // descriptorType
+                    nullptr, // pImageInfo
+                    &bufferInfo, // pBufferInfo
+                    nullptr // pTexelBufferView
+                ),
+                vk::WriteDescriptorSet(
+                    *allDescriptorSets[frameIndex][batchIndex], // dstSet
+                    1, // dstBinding
+                    0, // dstArrayElement
+                    1, // descriptorCount
+                    vk::DescriptorType::eCombinedImageSampler, // descriptorType
+                    &imageInfo, // pImageInfo
+                    nullptr, // pBufferInfo
+                    nullptr // pTexelBufferView
+                )
+            };
+
+            device.updateDescriptorSets(descriptorWrites, nullptr);
+        }
+    }
+    return allDescriptorSets;
 }
 
 

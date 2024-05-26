@@ -107,20 +107,23 @@ void Application::recordCommandBuffer(const vk::raii::CommandBuffer& commandBuff
     vk::Rect2D scissor({0, 0}, swapChainExtent_);
     commandBuffer.setScissor(0, scissor);
 
-    commandBuffer.bindVertexBuffers(0, *vertexBuffer_.buffer, {0});
-    commandBuffer.bindIndexBuffer(*indexBuffer_.buffer, 0, vk::IndexType::eUint32);
+    for (uint32_t batchIndex = 0; batchIndex < batches_.size(); ++batchIndex) {
 
-    commandBuffer.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics,
-        *pipelineLayout_,
-        0,
-        *descriptorSets_[currentFrame],
-        nullptr
-    );
+        commandBuffer.bindVertexBuffers(0, *(batches_[batchIndex].vertices.buffer), {0});
+        commandBuffer.bindIndexBuffer(*(batches_[batchIndex].indices.buffer), 0, vk::IndexType::eUint32);
+    
+        commandBuffer.bindDescriptorSets(
+            vk::PipelineBindPoint::eGraphics,
+            *pipelineLayout_,
+            0,
+            *descriptorSets_[currentFrame][batchIndex],
+            {}
+        );
+        //нужно знать кол-во индексов
+        commandBuffer.drawIndexed(static_cast<uint32_t>(singleSimpleMatMeshes_[batchIndex].indices.size()), 1, 0, 0, 0);
+    }
 
-    commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
     commandBuffer.endRenderPass();
-
     commandBuffer.end();
 }
 
@@ -171,14 +174,13 @@ void Application::updateUniformBuffer(uint32_t currentFrame){
     camera_.aspect = swapChainExtent_.width / (float) swapChainExtent_.height;
     
     rendr::MVPUniformBufferObject ubo;
-    ubo.model = glm::rotate(model_matrix_.model_, glm::radians(270.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-
+    //ubo.model = glm::rotate(model_matrix_.model_, glm::radians(270.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    ubo.model = glm::scale(model_matrix_.model_, glm::vec3(0.01f, 0.01f, 0.01f));
     ubo.view = glm::lookAt(camera_.pos, camera_.look_at_pos, camera_.worldUp);
 
     ubo.proj = glm::perspective(camera_.fov, camera_.aspect, camera_.near_plane, camera_.far_plane);
 
     ubo.proj[1][1] *= -1;
-
 
     memcpy(uniformBuffersMapped_[currentFrame], &ubo, sizeof(ubo));
 }

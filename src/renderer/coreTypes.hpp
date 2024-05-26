@@ -24,18 +24,23 @@ struct Mesh{
     std::vector<uint32_t> indices;
 };
 
-
-struct Material{
-    uint32_t materialIndex;
-    std::vector<rendr::Image> materialImages;
-    std::vector<rendr::Buffer> matBuffers;
-};
-
-
+template<typename BatchMaterial>
 struct Batch{
     rendr::Buffer vertices;
     rendr::Buffer indices;
-    Material* materialIndex;
+    BatchMaterial* materialPtr;
+
+    Batch(rendr::Buffer&& vert, rendr::Buffer&& ind, BatchMaterial* matIndex)
+        : vertices(std::move(vert)), indices(std::move(ind)), materialPtr(matIndex) {}
+};
+
+struct SimpleMaterial{
+    uint32_t materialIndex;
+    rendr::Image colorTexture;
+
+    SimpleMaterial(uint32_t index, rendr::Image&& texture)
+        : materialIndex(index), colorTexture(std::move(texture)) {}
+
 };
 
 
