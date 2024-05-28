@@ -18,9 +18,6 @@
 #include "window.hpp"
 #include "stb_image.h"
 #include "ufbx.h"
-#include "resourceDataTypes.hpp"
-#include "deviceConfig.hpp"
-#include "swapChainConfig.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -37,6 +34,183 @@ namespace std {
 
 namespace rendr{
 
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                                    VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                                    void* pUserData
+);
+bool checkValidationLayerSupport();
+void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
+
+
+struct DebugConfig{   
+#ifdef NDEBUG
+    static const bool enableValidationLayers = false;
+#else
+    static const bool enableValidationLayers = true;
+#endif
+    static const std::vector<const char*> validationLayers;
+};
+
+struct AppInfo{
+    static const std::string name;
+    static const std::string engineName;
+    static const int version;
+    static const int engineVersion;
+    static const uint32_t apiVersion;
+};
+
+class Instance {
+private:
+    vk::raii::Context context_;
+    vk::raii::Instance instance_;
+    vk::raii::DebugUtilsMessengerEXT debugUtilsMessenger_;
+
+public:
+    Instance();
+    Instance(Window const & window);
+
+    Instance(const Instance&) = delete;
+    Instance& operator=(const Instance&) = delete;
+
+    Instance(Instance&& other) noexcept;
+
+    Instance& operator=(Instance&& other) noexcept;
+
+    vk::raii::Instance const& operator*() const; 
+};
+
+struct SwapChainConfig{
+    std::function<bool(vk::SurfaceFormatKHR)> isSurfaceFormatSuitable = [](vk::SurfaceFormatKHR format){
+        return format.format == vk::Format::eR8G8B8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+    };
+
+    std::function<bool(vk::PresentModeKHR)> isPresentModeSuitable = [](vk::PresentModeKHR presentMode){
+        return presentMode == vk::PresentModeKHR::eMailbox;
+    };
+};
+
+struct QueueFamilyIndices {
+    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> presentFamily;
+    std::optional<uint32_t> transferFamily;
+    std::optional<uint32_t> computeFamily;
+
+    bool isGraphicsAndPresent() {
+        return graphicsFamily.has_value() && presentFamily.has_value();
+    }
+};
+
+struct DeviceConfig{
+    std::vector<const char*> requiredDeviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    };
+
+    vk::PhysicalDeviceFeatures deviceEnableFeatures;
+
+    std::function<bool(vk::PhysicalDeviceFeatures)> isDeviceFeaturesSuitable = [](vk::PhysicalDeviceFeatures features){
+        return features.samplerAnisotropy && features.geometryShader;
+    };
+
+    std::function<bool(vk::PhysicalDeviceProperties)> isDevicePropertiesSuitable = [](vk::PhysicalDeviceProperties properties){
+        return properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
+    };
+
+    std::function<bool(QueueFamilyIndices)> isDeviceFamilyIndicesSuitable = [](QueueFamilyIndices familyIndices){
+        return familyIndices.isGraphicsAndPresent();
+    };
+    
+};
+
+class Device;
+class SwapChain;
+class RenderSetup;
+
+class Device{
+    //private:
+public:
+    rendr::Instance instance_; 
+    vk::raii::SurfaceKHR surface_;
+    vk::raii::PhysicalDevice physicalDevice_;
+    vk::raii::Device device_;
+    vk::raii::Queue graphicsQueue_;
+    vk::raii::Queue presentQueue_;
+    vk::raii::CommandPool commandPool_;
+
+    friend class rendr::SwapChain;
+    friend class rendr::RenderSetup;
+public:
+    Device();
+    void create(DeviceConfig config, const rendr::Window& win);
+
+};
+
+class RendererSetup{
+private:
+    vk::raii::DescriptorSetLayout descriptorSetLayout_;
+    vk::raii::RenderPass renderPass_;
+    vk::raii::PipelineLayout pipelineLayout_;
+    vk::raii::Pipeline graphicsPipeline_;
+    std::vector<vk::raii::Framebuffer> swapChainFramebuffers_;
+public:
+    RendererSetup();
+    void createDefaultSetup(const rendr::Device& device, const rendr::SwapChain& SwapChain);
+};
+
+class SwapChain{
+//private:
+public:
+    vk::raii::SwapchainKHR swapChain_;
+    vk::Format swapChainImageFormat_;
+    vk::Extent2D swapChainExtent_;
+    std::vector<vk::Image> swapChainImages_;
+    std::vector<vk::raii::ImageView> swapChainImageViews_;
+    friend class rendr::RendererSetup;
+public:
+    SwapChain();
+
+    void create(const rendr::Device&  renderDevice, const rendr::Window& win, const rendr::SwapChainConfig& config);
+    void clear();
+};
+
+struct Image{
+    vk::raii::ImageView imageView;
+    vk::raii::DeviceMemory imageMemory;
+    vk::raii::Image image;
+
+    Image() : image(nullptr), imageMemory(nullptr), imageView(nullptr){}
+};
+
+struct Buffer{   
+    vk::raii::DeviceMemory bufferMemory;
+    vk::raii::Buffer buffer;
+    Buffer() : buffer(nullptr), bufferMemory(nullptr){}
+};
+
+template<typename VertexType>
+struct Mesh{
+    std::vector<VertexType> vertices;
+    std::vector<uint32_t> indices;
+};
+
+template<typename BatchMaterial>
+struct Batch{
+    rendr::Buffer vertices;
+    rendr::Buffer indices;
+    BatchMaterial* materialPtr;
+
+    Batch(rendr::Buffer&& vert, rendr::Buffer&& ind, BatchMaterial* matIndex)
+        : vertices(std::move(vert)), indices(std::move(ind)), materialPtr(matIndex) {}
+};
+
+struct SimpleMaterial{
+    uint32_t materialIndex;
+    rendr::Image colorTexture;
+
+    SimpleMaterial(uint32_t index, rendr::Image&& texture)
+        : materialIndex(index), colorTexture(std::move(texture)) {}
+};
 
 struct DeviceWithGraphicsAndPresentQueues{
     vk::raii::Device device;

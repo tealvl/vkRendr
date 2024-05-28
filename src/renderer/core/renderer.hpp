@@ -1,17 +1,12 @@
 #pragma once
 #include <vector>
+#include <map>
 #include "utility.hpp"
 #include "resourceDataTypes.hpp"
-#include "swapChain.hpp"
-#include "device.hpp"
-#include "renderSetup.hpp"
-
-
 
 namespace rendr{
 
     class Renderer{
-
 private:
     const int framesInFlight = 2;  
     int currentFrame;
@@ -23,11 +18,14 @@ private:
     std::vector<rendr::Buffer> uniformBuffers_;
     std::vector<void*> uniformBuffersMapped_;
 
-    std::vector<rendr::DrawableObj> objsToDraw;
+    std::map<int, std::vector<rendr::DrawableObj*>> setupIndexToDrawableObjs;
 
 public:
     void drawFrame();
-    void setDrawableObjects(std::vector<rendr::DrawableObj> objs);
+    void setDrawableObjects(const std::vector<rendr::DrawableObj>& objs);
+    
+    //return setupIndex
+    int addRenderSetup(rendr::RenderSetup setup);
 private:
     void recordCommandBuffer();    
 };

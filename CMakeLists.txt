@@ -9,16 +9,14 @@ add_subdirectory(dependencies/Vulkan-Hpp/glfw)
 add_executable(engine
     src/main.cpp
     src/Application.cpp
+
     src/renderer/core/window.cpp
-    src/renderer/utils/transform.cpp
-    src/renderer/core/instance.cpp
     src/renderer/core/utility.cpp
-    src/renderer/core/device.cpp
-    src/renderer/core/swapChain.cpp
+    src/renderer/core/renderer.cpp
+
+    src/renderer/utils/transform.cpp
     src/renderer/utils/inputManager.cpp
     src/renderer/utils/cameraManipulator.cpp
-    src/renderer/core/renderer.cpp
-    src/renderer/core/renderSetup.cpp
     src/renderer/utils/timer.cpp
     dependencies/ufbx/ufbx.c
 

@@ -7,6 +7,14 @@ void Application::run(){
 }
 
 void Application::init(){
+    //rendr::RenderConfig renderConfig();
+    //rendr::Renderer renderer(renderConfig);
+    
+    //MyMaterial mat;
+    //mat.init(renderer);
+
+
+
     rendr::DeviceConfig deviceConfig;
     deviceConfig.deviceEnableFeatures.setSamplerAnisotropy(VK_TRUE);
     rendr::SwapChainConfig swapChainConf;

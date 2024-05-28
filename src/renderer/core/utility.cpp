@@ -967,4 +967,182 @@ std::vector<rendr::PerFrameSync> createSyncObjects(const vk::raii::Device& devic
     return syncObjects;
 }
 
+
+RendererSetup::RendererSetup():
+descriptorSetLayout_(nullptr), 
+renderPass_(nullptr),
+pipelineLayout_(nullptr),
+graphicsPipeline_(nullptr),
+swapChainFramebuffers_()
+{}
+
+void RendererSetup::createDefaultSetup(const rendr::Device &device, const rendr::SwapChain &SwapChain){
+
+}
+
+
+SwapChain::SwapChain()
+: swapChain_(nullptr){}
+
+void SwapChain::create(const rendr::Device &renderDevice, const rendr::Window &win, const rendr::SwapChainConfig& config){
+    rendr::SwapChainData swapChainData = rendr::createSwapChain(renderDevice.physicalDevice_, renderDevice.surface_, renderDevice.device_, win, config);
+    swapChain_ = std::move(swapChainData.swapChain);
+    swapChainExtent_ = std::move(swapChainData.swapChainExtent);
+    swapChainImageFormat_ = std::move(swapChainData.swapChainImageFormat);
+    swapChainImages_ = swapChain_.getImages();
+    swapChainImageViews_ = rendr::createImageViews(swapChainImages_, renderDevice.device_, swapChainImageFormat_, vk::ImageAspectFlagBits::eColor);
+}
+
+void SwapChain::clear(){
+    for (auto& imageView : swapChainImageViews_) {
+        imageView.clear();
+    }
+    swapChain_.clear();
+}
+
+
+Device::Device():
+instance_(),
+surface_(nullptr),
+physicalDevice_(nullptr),
+device_(nullptr),
+graphicsQueue_(nullptr),
+presentQueue_(nullptr),
+commandPool_(nullptr)
+{}
+
+void Device::create(DeviceConfig config, const rendr::Window& win){
+    instance_ = rendr::Instance(win);
+    surface_ = win.createSurface(*instance_);
+    physicalDevice_ = pickPhysicalDevice(*instance_, surface_, config);
+    rendr::DeviceWithGraphicsAndPresentQueues deviceAndQueues = rendr::createDeviceWithGraphicsAndPresentQueues(physicalDevice_, surface_, config);
+    device_ = std::move(deviceAndQueues.device);
+    graphicsQueue_ = std::move(deviceAndQueues.graphicsQueue);
+    presentQueue_ = std::move(deviceAndQueues.presentQueue);
+    commandPool_ =  rendr::createGraphicsCommandPool(device_, rendr::findQueueFamilies(*physicalDevice_, *surface_));
+}
+
+
+
+const std::string AppInfo::name = "My Application";
+const std::string AppInfo::engineName = "My Engine";
+const int AppInfo::version = 1; 
+const int AppInfo::engineVersion = 1; 
+const uint32_t AppInfo::apiVersion = VK_API_VERSION_1_3; 
+
+const std::vector<const char*> DebugConfig::validationLayers = {
+    "VK_LAYER_KHRONOS_validation"
+};
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                                    VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                                    void* pUserData) {
+    std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+    return VK_FALSE;
+}
+
+bool checkValidationLayerSupport(){
+    uint32_t layerCount;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    std::vector<VkLayerProperties> availableLayers(layerCount);
+    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+    for (const char* layerName : DebugConfig::validationLayers) {
+        bool layerFound = false;
+
+        for (const auto& layerProperties : availableLayers) {
+            if (strcmp(layerName, layerProperties.layerName) == 0) {
+                layerFound = true;
+                break;
+            }
+        }
+
+        if (!layerFound) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+    createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo.pfnUserCallback = debugCallback;
+    createInfo.pUserData = nullptr; 
+}
+
+Instance::Instance() : context_(), instance_(nullptr), debugUtilsMessenger_(nullptr) {}
+
+Instance::Instance(Window const &window) : context_(), instance_(nullptr), debugUtilsMessenger_(nullptr)
+{
+    if (DebugConfig::enableValidationLayers && !checkValidationLayerSupport())
+    {
+        throw std::runtime_error("validation layers requested, but not available!");
+    }
+
+    vk::ApplicationInfo applicationInfo(
+        AppInfo::name.data(),
+        AppInfo::version,
+        AppInfo::engineName.data(),
+        AppInfo::engineVersion,
+        AppInfo::apiVersion);
+
+    vk::InstanceCreateInfo instanceCreateInfo({}, &applicationInfo);
+
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfoOutsideInstance{};
+    if (DebugConfig::enableValidationLayers)
+    {
+        instanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(DebugConfig::validationLayers.size());
+        instanceCreateInfo.ppEnabledLayerNames = DebugConfig::validationLayers.data();
+        populateDebugMessengerCreateInfo(debugCreateInfoOutsideInstance);
+        instanceCreateInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfoOutsideInstance;
+    }
+    else
+    {
+        instanceCreateInfo.enabledLayerCount = 0;
+        instanceCreateInfo.pNext = nullptr;
+    }
+
+    std::vector<const char *> extensions = window.getRequiredExtensions();
+
+    if (DebugConfig::enableValidationLayers)
+    {
+        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
+
+    instanceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    instanceCreateInfo.ppEnabledExtensionNames = extensions.data();
+
+    instance_ = vk::raii::Instance(context_, instanceCreateInfo);
+
+    if (DebugConfig::enableValidationLayers)
+    {
+        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfoInsideInstance{};
+        populateDebugMessengerCreateInfo(debugCreateInfoInsideInstance);
+        debugUtilsMessenger_ = vk::raii::DebugUtilsMessengerEXT(instance_, debugCreateInfoInsideInstance);
+    }
+}
+Instance::Instance(Instance &&other) noexcept
+: context_(std::move(other.context_)),
+    instance_(std::move(other.instance_)),
+    debugUtilsMessenger_(std::move(other.debugUtilsMessenger_)) 
+{}
+
+Instance &Instance::operator=(Instance &&other) noexcept{
+    if (this != &other) {
+        context_ = std::move(other.context_);
+        instance_ = std::move(other.instance_);
+        debugUtilsMessenger_ = std::move(other.debugUtilsMessenger_);
+    }
+    return *this;
+}
+vk::raii::Instance const &Instance::operator*() const{
+    return instance_;
+}
+
+
 }
