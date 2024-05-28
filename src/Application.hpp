@@ -34,6 +34,7 @@
 #include "timer.hpp"
 #include "device.hpp"
 #include "swapChain.hpp"
+#include "swapChainConfig.hpp"
 
 const std::string MODEL_PATH = "C:/Dev/cpp-projects/engine/resources/models/vikingRoom.obj";
 const std::string TEXTURE_PATH = "C:/Dev/cpp-projects/engine/resources/textures/viking_room.png";

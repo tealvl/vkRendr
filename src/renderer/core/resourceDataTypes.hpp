@@ -46,5 +46,18 @@ struct SimpleMaterial{
 };
 
 
+class IDrawable{
+    IMaterial mat;
+};
+
+class IMaterial{
+
+};
+
+class DrawableObj{
+    IDrawable obj;
+};
+
+
 
 }

@@ -8,6 +8,7 @@
 namespace rendr{
 
     class SwapChain;
+    class RenderSetup;
     
     class Device{
     //private:
@@ -21,6 +22,7 @@ namespace rendr{
         vk::raii::CommandPool commandPool_;
 
         friend class rendr::SwapChain;
+        friend class rendr::RenderSetup;
     public:
         Device();
         void create(DeviceConfig config, const rendr::Window& win);

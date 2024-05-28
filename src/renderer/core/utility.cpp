@@ -116,9 +116,10 @@ DeviceWithGraphicsAndPresentQueues createDeviceWithGraphicsAndPresentQueues( vk:
     return DeviceWithGraphicsAndPresentQueues{std::move(device), std::move(graphicsQueue), std::move(presentQueue)};
 }
 
-VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const & availableFormats) {
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const & availableFormats,
+    const rendr::SwapChainConfig& config) {
     for (const auto& availableFormat : availableFormats) {
-        if (availableFormat.format == vk::Format::eR8G8B8A8Srgb && availableFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
+        if (config.isSurfaceFormatSuitable(availableFormat)) {
             return availableFormat;
         }
     }
@@ -126,9 +127,10 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> con
     return availableFormats[0];
 }
 
-vk::PresentModeKHR chooseSwapPresentMode(std::vector<vk::PresentModeKHR> const & availablePresentModes) {
+vk::PresentModeKHR chooseSwapPresentMode(std::vector<vk::PresentModeKHR> const & availablePresentModes,
+    const rendr::SwapChainConfig& config) {
     for (const auto& availablePresentMode : availablePresentModes) {
-        if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
+        if (config.isPresentModeSuitable(availablePresentMode)) {
             return availablePresentMode;
         }
     }
@@ -152,11 +154,16 @@ vk::Extent2D chooseSwapExtent(vk::SurfaceCapabilitiesKHR const & capabilities, s
     }
 }
 
-SwapChainData createSwapChain(vk::raii::PhysicalDevice const & physicalDevice, vk::raii::SurfaceKHR const & surface, vk::raii::Device const & device, rendr::Window const & win) 
+SwapChainData createSwapChain(
+    vk::raii::PhysicalDevice const & physicalDevice, 
+    vk::raii::SurfaceKHR const & surface, 
+    vk::raii::Device const & device, 
+    rendr::Window const & win,
+    const rendr::SwapChainConfig& config) 
 {
     rendr::SwapChainSupportDetails swapChainSupport = rendr::querySwapChainSupport(physicalDevice, surface);
-    vk::SurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
-    vk::PresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+    vk::SurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats, config);
+    vk::PresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes, config);
     vk::Extent2D extent = chooseSwapExtent(swapChainSupport.capabilities, win.getFramebufferSize());
     
     uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1; 

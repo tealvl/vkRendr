@@ -8,17 +8,18 @@ add_subdirectory(dependencies/Vulkan-Hpp/glfw)
 
 add_executable(engine
     src/main.cpp
-    src/HelloTriangleApplication.cpp
-    src/renderer/test.cpp
-    src/renderer/window.cpp
-    src/renderer/transform.cpp
-    src/renderer/instance.cpp
-    src/renderer/utility.cpp
-    src/renderer/device.cpp
-    src/renderer/swapChain.cpp
-    src/renderer/inputManager.cpp
-    src/renderer/cameraManipulator.cpp
-    src/renderer/timer.cpp
+    src/Application.cpp
+    src/renderer/core/window.cpp
+    src/renderer/utils/transform.cpp
+    src/renderer/core/instance.cpp
+    src/renderer/core/utility.cpp
+    src/renderer/core/device.cpp
+    src/renderer/core/swapChain.cpp
+    src/renderer/utils/inputManager.cpp
+    src/renderer/utils/cameraManipulator.cpp
+    src/renderer/core/renderer.cpp
+    src/renderer/core/renderSetup.cpp
+    src/renderer/utils/timer.cpp
     dependencies/ufbx/ufbx.c
 
 )
@@ -30,9 +31,12 @@ target_include_directories(engine
     PRIVATE dependencies/Vulkan-Hpp/vulkan/
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/core
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/utils
     PRIVATE dependencies/stb
     PRIVATE dependencies/tinyobjloader
     PRIVATE dependencies/ufbx
+
 )
 
 # Указываем путь к исходникам

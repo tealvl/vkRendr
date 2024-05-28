@@ -20,6 +20,7 @@
 #include "ufbx.h"
 #include "resourceDataTypes.hpp"
 #include "deviceConfig.hpp"
+#include "swapChainConfig.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -170,13 +171,13 @@ SwapChainSupportDetails querySwapChainSupport(vk::raii::PhysicalDevice const &de
 
 DeviceWithGraphicsAndPresentQueues createDeviceWithGraphicsAndPresentQueues( vk::raii::PhysicalDevice const & physicalDevice,  vk::raii::SurfaceKHR const & surface, const DeviceConfig& config);
 
-VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const &availableFormats);
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const &availableFormats, const rendr::SwapChainConfig &config);
 
-vk::PresentModeKHR chooseSwapPresentMode(std::vector<vk::PresentModeKHR> const &availablePresentModes);
+vk::PresentModeKHR chooseSwapPresentMode(std::vector<vk::PresentModeKHR> const &availablePresentModes, const rendr::SwapChainConfig &config);
 
 vk::Extent2D chooseSwapExtent(vk::SurfaceCapabilitiesKHR const &capabilities, std::pair<int, int> const &winFramebufferSize);
 
-SwapChainData createSwapChain(vk::raii::PhysicalDevice const &physicalDevice, vk::raii::SurfaceKHR const &surface, vk::raii::Device const &device, Window const &win);
+SwapChainData createSwapChain(vk::raii::PhysicalDevice const &physicalDevice, vk::raii::SurfaceKHR const &surface, vk::raii::Device const &device, rendr::Window const &win, const rendr::SwapChainConfig &config);
 
 vk::raii::ImageView createImageView(vk::raii::Device const &device, vk::Image const &image, vk::Format const &format, vk::ImageAspectFlags aspectFlags);
 

@@ -1,4 +1,4 @@
-#include "HelloTriangleApplication.hpp"
+#include "Application.hpp"
 
 
 void Application::run(){
@@ -9,9 +9,10 @@ void Application::run(){
 void Application::init(){
     rendr::DeviceConfig deviceConfig;
     deviceConfig.deviceEnableFeatures.setSamplerAnisotropy(VK_TRUE);
+    rendr::SwapChainConfig swapChainConf;
     
     device_.create(deviceConfig, window_);
-    swapChain_.create(device_, window_);
+    swapChain_.create(device_, window_, swapChainConf);
 
     renderPass_ = rendr::createRenderPassWithColorAndDepthAttOneSubpass(device_.device_, swapChain_.swapChainImageFormat_, rendr::findDepthFormat(device_.physicalDevice_));
     descriptorSetLayout_ = rendr::createUboAndSamplerDescriptorSetLayout(device_.device_);
@@ -38,8 +39,8 @@ void Application::init(){
     auto matToMesh = rendr::mergeMeshesByMaterial(meshesAndMatInd);
     
     meshesAndMatInd.clear();
-    rendr::STBImageRaii walls("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_walls_Base_color.png");  
-    rendr::STBImageRaii details("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_details_Base_color.png");  
+    rendr::STBImageRaii walls("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_walls_baked.png");  
+    rendr::STBImageRaii details("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_details_Baked.png");  
     rendr::Image wallsTextureImage = rendr::create2DTextureImage(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, std::move(walls));
     rendr::Image detailsTextureImage = rendr::create2DTextureImage(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, std::move(details));
     rendr::SimpleMaterial wallsMat (0, std::move(wallsTextureImage));
@@ -101,6 +102,8 @@ void Application::mainLoop(){
         camManip_.update(timer_.getDeltaTime());
         inputManager_.resetInputOffsets();
 
+        //renderer.setDrawableObjs(vec<DrawableObj>)
+        //renderer.drawFrame();
         drawFrame();
     }
     device_.device_.waitIdle();
@@ -137,7 +140,7 @@ void Application::recreateSwapChain() {
     cleanupSwapChain();
 
     
-    swapChain_.create(device_, window_);
+    swapChain_.create(device_, window_, rendr::SwapChainConfig());
 
     depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
     swapChainFramebuffers_ = rendr::createSwapChainFramebuffersWithDepthAtt(device_.device_, renderPass_, swapChain_.swapChainImageViews_, depthImage_.imageView, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);

@@ -1,6 +1,7 @@
 #pragma once
 #include <vulkan/vulkan_raii.hpp>
 #include "device.hpp"
+#include "swapChainConfig.hpp"
 
 namespace rendr{
 
@@ -15,7 +16,7 @@ public:
 public:
     SwapChain();
 
-    void create(const rendr::Device&  renderDevice, const rendr::Window& win);
+    void create(const rendr::Device&  renderDevice, const rendr::Window& win, const rendr::SwapChainConfig& config);
     void clear();
 };
 
