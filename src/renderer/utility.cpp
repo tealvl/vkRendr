@@ -8,51 +8,44 @@
 
 namespace rendr{
 
-bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
-    uint32_t extensionCount;
-    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-
-    std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
-
+bool checkDeviceExtensionSupport(const vk::PhysicalDevice& device, const std::vector<const char*>& requiredExtensions) {
+    std::vector<vk::ExtensionProperties> availableExtensions = device.enumerateDeviceExtensionProperties();
+    std::set<std::string> requiredExtensionsCopy(requiredExtensions.begin(), requiredExtensions.end());
     for (const auto& extension : availableExtensions) {
-        requiredExtensions.erase(extension.extensionName);
+        requiredExtensionsCopy.erase(extension.extensionName);
     }
 
-    return requiredExtensions.empty();
+    return requiredExtensionsCopy.empty();
 }
-//TODO Добавить настройку для выбора физического устройства
-bool isPhysicalDeviceSuitable(vk::raii::PhysicalDevice const & device, vk::raii::SurfaceKHR const & surface) {
+
+
+bool isPhysicalDeviceSuitable(vk::raii::PhysicalDevice const & device, vk::raii::SurfaceKHR const & surface, const DeviceConfig& config) {
+    
     vk::PhysicalDeviceFeatures features = device.getFeatures();
     vk::PhysicalDeviceProperties properties = device.getProperties();
-    
+    bool featuresSupport = config.isDeviceFeaturesSuitable(features);
+    bool propertiesSupport = config.isDevicePropertiesSuitable(properties);
+
     QueueFamilyIndices indices = findQueueFamilies(*device, *surface);
-    bool extensionsSupported = checkDeviceExtensionSupport(*device);
+    bool familyIndicesSupport = config.isDeviceFamilyIndicesSuitable(indices);
+
+    bool extensionsSupported = checkDeviceExtensionSupport(*device, config.requiredDeviceExtensions);
     bool swapChainAdequate = false;
     if (extensionsSupported) {
         SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device, surface);
         swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
     }
-    VkPhysicalDeviceFeatures supportedFeatures;
-    vkGetPhysicalDeviceFeatures(*device, &supportedFeatures);
 
-    return 
-    indices.isComplete() 
-    && extensionsSupported 
-    && swapChainAdequate  
-    && supportedFeatures.samplerAnisotropy 
-    &&  properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu 
-    && features.geometryShader;
+    return featuresSupport && propertiesSupport && swapChainAdequate && extensionsSupported && familyIndicesSupport;
 }
 
-vk::raii::PhysicalDevice pickPhysicalDevice(vk::raii::Instance const & instance, vk::raii::SurfaceKHR const & surface){
+vk::raii::PhysicalDevice pickPhysicalDevice(vk::raii::Instance const & instance, vk::raii::SurfaceKHR const & surface, const DeviceConfig& config){
     vk::raii::PhysicalDevice physicalDevice(nullptr);
     vk::raii::PhysicalDevices devices( instance );
     
     bool suitableDevicePicked = false;
     for (const auto& device : devices) {
-        if (isPhysicalDeviceSuitable(device, surface)) {
+        if (isPhysicalDeviceSuitable(device, surface, config)) {
             physicalDevice = device;
             suitableDevicePicked = true;
             break;
@@ -63,31 +56,28 @@ vk::raii::PhysicalDevice pickPhysicalDevice(vk::raii::Instance const & instance,
     }
     return physicalDevice;
 }
-//TODO все типы очередей
-QueueFamilyIndices findQueueFamilies(const VkPhysicalDevice& device, const VkSurfaceKHR& surface) {
-    QueueFamilyIndices indices;
-    
-    uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
-    int i = 0;
+QueueFamilyIndices findQueueFamilies(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface) {
+    QueueFamilyIndices indices;
+    std::vector<vk::QueueFamilyProperties> queueFamilies = device.getQueueFamilyProperties();
+    uint32_t familyIndex = 0;
     for (const auto& queueFamily : queueFamilies) {
-        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-            indices.graphicsFamily = i;
+        if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics) {
+            indices.graphicsFamily = familyIndex;
         }
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-        if(presentSupport){
-            indices.presentFamily = i;
+       
+        if(device.getSurfaceSupportKHR(familyIndex, surface)){
+            indices.presentFamily = familyIndex;
         }
 
-        if (indices.isComplete()) {
+        //TODO найти все типы очередей
+        if (indices.isGraphicsAndPresent()) {
             break;
         }
-        i++;
+        familyIndex++;
     }
+
     return indices;
 }
 
@@ -100,7 +90,7 @@ SwapChainSupportDetails querySwapChainSupport(vk::raii::PhysicalDevice const & d
     return details;
 }
 
-DeviceWithQueues createDeviceWithQueues( vk::raii::PhysicalDevice const & physicalDevice,  vk::raii::SurfaceKHR const & surface){
+DeviceWithGraphicsAndPresentQueues createDeviceWithGraphicsAndPresentQueues( vk::raii::PhysicalDevice const & physicalDevice,  vk::raii::SurfaceKHR const & surface, const DeviceConfig& config){
     QueueFamilyIndices indices = findQueueFamilies(*physicalDevice, *surface);
     
     std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
@@ -111,23 +101,19 @@ DeviceWithQueues createDeviceWithQueues( vk::raii::PhysicalDevice const & physic
         queueCreateInfos.push_back(vk::DeviceQueueCreateInfo( vk::DeviceQueueCreateFlags(), indices.graphicsFamily.value(), 1, &queuePriority));
     }
 
-    //TODO вынести требования к устройству
-    vk::PhysicalDeviceFeatures deviceFeatures{};
-    deviceFeatures.samplerAnisotropy = VK_TRUE;
-
     vk::DeviceCreateInfo deviceCreateInfo;
     deviceCreateInfo.setQueueCreateInfoCount(queueCreateInfos.size()); 
     deviceCreateInfo.setPQueueCreateInfos(queueCreateInfos.data()); 
-    deviceCreateInfo.setEnabledExtensionCount(deviceExtensions.size()); 
-    deviceCreateInfo.setPpEnabledExtensionNames(deviceExtensions.data()); 
-    deviceCreateInfo.setPEnabledFeatures(&deviceFeatures); 
+    deviceCreateInfo.setEnabledExtensionCount(config.requiredDeviceExtensions.size()); 
+    deviceCreateInfo.setPpEnabledExtensionNames(config.requiredDeviceExtensions.data()); 
+    deviceCreateInfo.setPEnabledFeatures(&config.deviceEnableFeatures); 
     deviceCreateInfo.setFlags(vk::DeviceCreateFlags());
 
     vk::raii::Device device(physicalDevice, deviceCreateInfo);
     vk::raii::Queue graphicsQueue(device, indices.graphicsFamily.value(), 0);
     vk::raii::Queue presentQueue (device, indices.presentFamily.value(), 0);
     
-    return DeviceWithQueues{std::move(device), std::move(graphicsQueue), std::move(presentQueue)};
+    return DeviceWithGraphicsAndPresentQueues{std::move(device), std::move(graphicsQueue), std::move(presentQueue)};
 }
 
 VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const & availableFormats) {
@@ -508,7 +494,7 @@ std::vector<vk::raii::Framebuffer> createSwapChainFramebuffersWithDepthAtt(
 
 vk::raii::CommandPool createGraphicsCommandPool( const vk::raii::Device& device,  const rendr::QueueFamilyIndices& queueFamilyIndices)
 {
-    vk::CommandPoolCreateInfo poolCreateInfo(
+    vk::CommandPoolCreateInfo poolCreateInfo( 
         vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient,
         queueFamilyIndices.graphicsFamily.value()
     );

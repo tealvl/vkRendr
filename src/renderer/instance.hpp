@@ -1,13 +1,38 @@
 #pragma once
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
-
 #include <iostream>
-#include "debug.hpp"
+
 #include "window.hpp"
-#include "config.hpp"
 
 namespace rendr{
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                                    VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                                    void* pUserData
+);
+bool checkValidationLayerSupport();
+void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
+
+
+struct DebugConfig{   
+#ifdef NDEBUG
+    static const bool enableValidationLayers = false;
+#else
+    static const bool enableValidationLayers = true;
+#endif
+    static const std::vector<const char*> validationLayers;
+};
+
+struct AppInfo{
+    static const std::string name;
+    static const std::string engineName;
+    static const int version;
+    static const int engineVersion;
+    static const uint32_t apiVersion;
+};
+
 class Instance {
 private:
     vk::raii::Context context_;
@@ -15,77 +40,17 @@ private:
     vk::raii::DebugUtilsMessengerEXT debugUtilsMessenger_;
 
 public:
-    Instance()
-        : context_(), instance_(nullptr), debugUtilsMessenger_(nullptr) {}
+    Instance();
+    Instance(Window const & window);
 
-    Instance(Window const & window)
-        : context_(), instance_(nullptr), debugUtilsMessenger_(nullptr) {
-        if (DebugConfig::enableValidationLayers && !checkValidationLayerSupport()) {
-            throw std::runtime_error("validation layers requested, but not available!");
-        }
-
-        vk::ApplicationInfo applicationInfo(
-            AppInfo::name.data(),
-            AppInfo::version,
-            AppInfo::engineName.data(),
-            AppInfo::engineVersion,
-            AppInfo::apiVersion
-        );
-
-        vk::InstanceCreateInfo instanceCreateInfo({}, &applicationInfo);
-
-        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfoOutsideInstance{};
-        if (DebugConfig::enableValidationLayers) {
-            instanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(DebugConfig::validationLayers.size());
-            instanceCreateInfo.ppEnabledLayerNames = DebugConfig::validationLayers.data();
-            populateDebugMessengerCreateInfo(debugCreateInfoOutsideInstance);
-            instanceCreateInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfoOutsideInstance;
-        } else {
-            instanceCreateInfo.enabledLayerCount = 0;
-            instanceCreateInfo.pNext = nullptr;
-        }
-
-        std::vector<const char*> extensions = window.getRequiredExtensions();
-
-        if (DebugConfig::enableValidationLayers) {
-            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-        }
-
-        instanceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-        instanceCreateInfo.ppEnabledExtensionNames = extensions.data();
-
-        instance_ = vk::raii::Instance(context_, instanceCreateInfo);
-
-        if (DebugConfig::enableValidationLayers) {
-            VkDebugUtilsMessengerCreateInfoEXT debugCreateInfoInsideInstance{};
-            populateDebugMessengerCreateInfo(debugCreateInfoInsideInstance);
-            debugUtilsMessenger_ = vk::raii::DebugUtilsMessengerEXT(instance_, debugCreateInfoInsideInstance);
-        }
-    }
-
-    
-    Instance(Instance&& other) noexcept
-        : context_(std::move(other.context_)),
-          instance_(std::move(other.instance_)),
-          debugUtilsMessenger_(std::move(other.debugUtilsMessenger_)) {}
-
-    
-    Instance& operator=(Instance&& other) noexcept {
-        if (this != &other) {
-            context_ = std::move(other.context_);
-            instance_ = std::move(other.instance_);
-            debugUtilsMessenger_ = std::move(other.debugUtilsMessenger_);
-        }
-        return *this;
-    }
-
-    
     Instance(const Instance&) = delete;
     Instance& operator=(const Instance&) = delete;
 
-    vk::raii::Instance const& operator*() const {
-        return instance_;
-    }
+    Instance(Instance&& other) noexcept;
+
+    Instance& operator=(Instance&& other) noexcept;
+
+    vk::raii::Instance const& operator*() const; 
 };
 
 }

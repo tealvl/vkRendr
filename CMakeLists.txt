@@ -13,14 +13,14 @@ add_executable(engine
     src/renderer/window.cpp
     src/renderer/transform.cpp
     src/renderer/instance.cpp
-    src/renderer/debug.cpp
     src/renderer/utility.cpp
     src/renderer/device.cpp
-    src/renderer/config.cpp
+    src/renderer/swapChain.cpp
     src/renderer/inputManager.cpp
     src/renderer/cameraManipulator.cpp
     src/renderer/timer.cpp
     dependencies/ufbx/ufbx.c
+
 )
 
 # Указываем пути к заголовочным файлам 

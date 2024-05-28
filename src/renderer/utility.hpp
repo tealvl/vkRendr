@@ -18,7 +18,8 @@
 #include "window.hpp"
 #include "stb_image.h"
 #include "ufbx.h"
-#include "coreTypes.hpp"
+#include "resourceDataTypes.hpp"
+#include "deviceConfig.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -35,22 +36,8 @@ namespace std {
 
 namespace rendr{
 
-//TODO вынести в файл конфигурации требования к девайсу
-const std::vector<const char*> deviceExtensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
-};
 
-//TODO расширить другими типами очередей
-struct QueueFamilyIndices {
-std::optional<uint32_t> graphicsFamily;
-std::optional<uint32_t> presentFamily;
-
-bool isComplete() {
-    return graphicsFamily.has_value() && presentFamily.has_value();
-}
-};
-
-struct DeviceWithQueues{
+struct DeviceWithGraphicsAndPresentQueues{
     vk::raii::Device device;
     vk::raii::Queue graphicsQueue;
     vk::raii::Queue presentQueue;
@@ -171,17 +158,17 @@ private:
     ufbx_scene* scene_ = nullptr;
 };
 
-bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+bool checkDeviceExtensionSupport(const vk::PhysicalDevice& device, const std::vector<const char*>& requiredExtensions);
 
-bool isPhysicalDeviceSuitable(vk::raii::PhysicalDevice const &device, vk::raii::SurfaceKHR const &surface);
+bool isPhysicalDeviceSuitable(vk::raii::PhysicalDevice const & device, vk::raii::SurfaceKHR const & surface, const DeviceConfig& config);
 
-vk::raii::PhysicalDevice pickPhysicalDevice(vk::raii::Instance const &instance, vk::raii::SurfaceKHR const &surface);
+vk::raii::PhysicalDevice pickPhysicalDevice(vk::raii::Instance const & instance, vk::raii::SurfaceKHR const & surface, const DeviceConfig& config);
 
-QueueFamilyIndices findQueueFamilies(const VkPhysicalDevice& device, const VkSurfaceKHR& surface);
+QueueFamilyIndices findQueueFamilies(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface);
 
 SwapChainSupportDetails querySwapChainSupport(vk::raii::PhysicalDevice const &device, vk::raii::SurfaceKHR const &surface);
 
-DeviceWithQueues createDeviceWithQueues(vk::raii::PhysicalDevice const &physicalDevice, vk::raii::SurfaceKHR const &surface);
+DeviceWithGraphicsAndPresentQueues createDeviceWithGraphicsAndPresentQueues( vk::raii::PhysicalDevice const & physicalDevice,  vk::raii::SurfaceKHR const & surface, const DeviceConfig& config);
 
 VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const &availableFormats);
 
@@ -210,8 +197,6 @@ vk::raii::DescriptorSetLayout createUboAndSamplerDescriptorSetLayout(const vk::r
 vk::raii::ShaderModule createShaderModule(const vk::raii::Device &device, const std::vector<char> &code);
 
 vk::raii::PipelineLayout createPipelineLayout(const vk::raii::Device &device, const std::vector<vk::DescriptorSetLayout> &descriptorSetLayouts, const std::vector<vk::PushConstantRange> &pushConstantRanges);
-
-//vk::raii::Pipeline createGraphicsPipelineWithDefaults(const vk::raii::Device &device, const vk::raii::RenderPass &renderPass, const vk::raii::PipelineLayout &pipelineLayout, vk::Extent2D swapChainExtent);
 
 uint32_t findMemoryType(vk::raii::PhysicalDevice const &physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties);
 
@@ -257,8 +242,7 @@ std::vector<vk::raii::CommandBuffer> createCommandBuffers(const vk::raii::Device
 
 std::vector<rendr::PerFrameSync> createSyncObjects(const vk::raii::Device &device, uint32_t framesInFlight);
 
-static std::vector<char> readFile(std::string const &filename)
-{
+static std::vector<char> readFile(std::string const &filename){
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
@@ -429,14 +413,14 @@ vk::raii::Pipeline createGraphicsPipelineWithDefaults(
     );
 
     vk::PipelineColorBlendAttachmentState colorBlendAttachment(
-        VK_FALSE, // blendEnable
-        vk::BlendFactor::eOne, // srcColorBlendFactor
-        vk::BlendFactor::eZero, // dstColorBlendFactor
+        VK_TRUE, // blendEnable
+        vk::BlendFactor::eSrcAlpha, // srcColorBlendFactor
+        vk::BlendFactor::eOneMinusSrcAlpha, // dstColorBlendFactor
         vk::BlendOp::eAdd, // colorBlendOp
         vk::BlendFactor::eOne, // srcAlphaBlendFactor
         vk::BlendFactor::eZero, // dstAlphaBlendFactor
         vk::BlendOp::eAdd, // alphaBlendOp
-        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA // colorWriteMask
+        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA 
     );
 
     vk::PipelineColorBlendStateCreateInfo colorBlending(
