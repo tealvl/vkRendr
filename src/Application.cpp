@@ -1,6 +1,5 @@
 #include "Application.hpp"
 
-
 void Application::run(){
     init();
     mainLoop();
@@ -11,29 +10,29 @@ void Application::init(){
     renderConfig.deviceConfig.deviceEnableFeatures.setSamplerAnisotropy(true);
     renderer.init(renderConfig, window);
     
-    SimpleMaterial mat;
-    renderer.initMaterial(mat);
+    SimpleMaterial material;
+    renderer.initMaterial(material);
 
-    //DrawableObj zen_room(Material mat);
-   
-    
-    textureSampler = rendr::createTextureSampler(device_.device_, device_.physicalDevice_);
+    MeshWithTextureObj walls(material);
+    MeshWithTextureObj details(material);
+
+    rendr::STBImageRaii wallsTex("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_walls_baked.png");  
+    rendr::STBImageRaii detailsTex("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_details_Baked.png");  
+    walls.loadTexture(std::move(wallsTex), renderer);    
+    details.loadTexture(std::move(detailsTex), renderer);
+
     rendr::UfbxSceneRaii fbxScene("C:/Dev/cpp-projects/engine/resources/zen-studio/source/room.fbx");
     auto meshesAndMatInd = rendr::ufbxLoadMeshesPartsSepByMaterial(fbxScene.get());  
     auto fbxMatToMesh = rendr::mergeMeshesByMaterial(meshesAndMatInd);
-    meshesAndMatInd.clear();
-    rendr::STBImageRaii walls("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_walls_baked.png");  
-    rendr::STBImageRaii details("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_details_Baked.png");  
-    rendr::Image wallsTextureImage = rendr::create2DTextureImage(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, std::move(walls));
-    rendr::Image detailsTextureImage = rendr::create2DTextureImage(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, std::move(details));
+    walls.loadMesh(fbxMatToMesh[0], renderer);
+    details.loadMesh(fbxMatToMesh[2], renderer);
 
+    
+    textureSampler = rendr::createTextureSampler(device_.device_, device_.physicalDevice_);
     descriptorPool_ = rendr::createDescriptorPool(device_.device_, FramesInFlight, batches_.size());
     descriptorSets_ = rendr::createUboAndSamplerDescriptorSets(device_.device_, descriptorPool_, descriptorSetLayout_, uniformBuffers_,
         textureSampler_, FramesInFlight, batches_, rendr::MVPUniformBufferObject()
     );
-    commandBuffers_ = rendr::createCommandBuffers(device_.device_, device_.commandPool_, FramesInFlight);
-    framesSyncObjs_ = rendr::createSyncObjects(device_.device_, FramesInFlight);
-
 
     inputManager.setUpWindowCallbacks(window);
     camManip.setCamera(camera);

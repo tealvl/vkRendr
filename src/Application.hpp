@@ -32,6 +32,7 @@
 #include "CameraManipulator.hpp"
 #include "timer.hpp"
 #include "simpleMaterial.hpp"
+#include "simpleDrawableObj.hpp"
 
 const std::string MODEL_PATH = "C:/Dev/cpp-projects/engine/resources/models/vikingRoom.obj";
 const std::string TEXTURE_PATH = "C:/Dev/cpp-projects/engine/resources/textures/viking_room.png";
@@ -43,8 +44,8 @@ public:
    
     Application()
     : 
-    glwfContext_(), 
-    window_(), 
+    glwfContext(), 
+    window(), 
     renderer()
     {}
 
@@ -53,10 +54,12 @@ private:
     rendr::Window window;
     rendr::Renderer renderer;
 
+    MeshWithTextureObj walls;
+    MeshWithTextureObj details;
+
     vk::raii::DescriptorPool descriptorPool_;
     std::vector<std::vector<vk::raii::DescriptorSet>> descriptorSets_;
     
-    rendr::Image textureImage;
     vk::raii::Sampler textureSampler;
 
     rendr::InputManager inputManager;

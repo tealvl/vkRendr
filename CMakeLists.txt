@@ -12,7 +12,6 @@ add_executable(engine
 
     src/renderer/core/window.cpp
     src/renderer/core/utility.cpp
-    src/renderer/core/renderer.cpp
 
     src/renderer/utils/transform.cpp
     src/renderer/utils/inputManager.cpp

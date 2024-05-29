@@ -18,7 +18,6 @@
 #include "window.hpp"
 #include "stb_image.h"
 #include "ufbx.h"
-#include "renderer.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -127,6 +126,7 @@ struct DeviceConfig{
 class Device;
 class SwapChain;
 class RendererSetup;
+class Renderer;
 
 struct Device{
     rendr::Instance instance_; 
@@ -805,6 +805,7 @@ public:
     const rendr::SwapChain& getSwapChain() const{
         return swapChain_;
     }
+    
     const rendr::Image& getDepthImage() const{
         return depthImage_;
     }
@@ -820,8 +821,10 @@ struct Material{
 };
 
 struct DrawableObj {
+    DrawableObj(Material& mat) : renderMaterial(&mat){}
     Material* renderMaterial;
     virtual void bindResources(const vk::raii::CommandBuffer& buffer) = 0;
+    virtual size_t getNumOfDrawIndices() = 0;
     virtual ~DrawableObj() = default;
 };
 

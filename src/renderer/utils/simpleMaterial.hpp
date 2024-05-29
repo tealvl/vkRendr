@@ -1,5 +1,4 @@
 #pragma once
-#include "renderer.hpp"
 #include "utility.hpp"
 
 class SimpleMaterial : public rendr::Material{

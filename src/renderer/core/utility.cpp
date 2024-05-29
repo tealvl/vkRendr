@@ -1167,7 +1167,7 @@ void Renderer::drawFrame(){
     device_.device_.resetFences({*framesSyncObjs_[currentFrame_].inFlightFence});
 
     commandBuffers_[currentFrame_].reset();
-    recordCommandBuffer(commandBuffers_[currentFrame_], imageIndex);
+    recordCommandBuffer();
 
     vk::PipelineStageFlags waitStages = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 
@@ -1251,11 +1251,12 @@ void Renderer::init(const RendererConfig& config, rendr::Window& window){
     };
 }
 
-void Renderer::recordCommandBuffer()
-{
-    for (int i = 0; i < setupIndexToDrawableObjs.size(); ++i ) {
+void Renderer::recordCommandBuffer(){
+    vk::raii::CommandBuffer& commandBuffer = commandBuffers_[currentFrame_];
+    
+    for (auto& setup : setupIndexToDrawableObjs ) {
 
-        // commandBuffer.setViewport(0, viewport);
+        //commandBuffer.setViewport(0, viewport);
         // commandBuffer.setScissor(0, scissor);
         // commandBuffer.beginRenderPass(rendrSetups_[i].renderPass_, vk::SubpassContents::eInline);
         // commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *rendrSetups_[i].graphicsPipeline);
