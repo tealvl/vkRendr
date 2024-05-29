@@ -8,7 +8,7 @@ void Application::run(){
 
 void Application::init(){
     rendr::DeviceConfig deviceConfig;
-    deviceConfig.deviceEnableFeatures.setSamplerAnisotropy(VK_TRUE);
+    deviceConfig.deviceEnableFeatures.setSamplerAnisotropy(true);
     
     device_.create(deviceConfig, window_);
     swapChain_.create(device_, window_);
