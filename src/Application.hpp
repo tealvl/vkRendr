@@ -31,6 +31,7 @@
 #include "inputManager.hpp"
 #include "CameraManipulator.hpp"
 #include "timer.hpp"
+#include "simpleMaterial.hpp"
 
 const std::string MODEL_PATH = "C:/Dev/cpp-projects/engine/resources/models/vikingRoom.obj";
 const std::string TEXTURE_PATH = "C:/Dev/cpp-projects/engine/resources/textures/viking_room.png";
@@ -44,34 +45,15 @@ public:
     : 
     glwfContext_(), 
     window_(), 
-    device_(),
-    swapChain_(),
-    renderPass_(nullptr),
-    descriptorSetLayout_(nullptr),
-    pipelineLayout_(nullptr),
-    graphicsPipeline_(nullptr),
-    depthImage_(),
-    textureImage_(),
-    textureSampler_(nullptr),
-    vertexBuffer_(),
-    descriptorPool_(nullptr),
-    framebufferResized(false),
-    commandPool_(nullptr)
+    renderer(),
+
+    
     {}
 
 private:
-    rendr::GlfwContext glwfContext_;
-    rendr::Window window_;
-    rendr::Device device_;
-    rendr::SwapChain swapChain_;
-
-    vk::raii::CommandPool commandPool_;
-    std::vector<vk::raii::Framebuffer> swapChainFramebuffers_;
-
-    vk::raii::DescriptorSetLayout descriptorSetLayout_;
-    vk::raii::RenderPass renderPass_;
-    vk::raii::PipelineLayout pipelineLayout_;
-    vk::raii::Pipeline graphicsPipeline_;
+    rendr::GlfwContext glwfContext;
+    rendr::Window window;
+    rendr::Renderer renderer;
 
     rendr::Image depthImage_;
 
@@ -90,15 +72,10 @@ private:
     vk::raii::DescriptorPool descriptorPool_;
     std::vector<std::vector<vk::raii::DescriptorSet>> descriptorSets_;
     
-    rendr::Image textureImage_;
-    vk::raii::Sampler textureSampler_;
+    rendr::Image textureImage;
+    vk::raii::Sampler textureSampler;
 
-    std::vector<rendr::VertexPTN> vertices;
-    std::vector<uint32_t> indices;
 
-    std::vector<rendr::SimpleMaterial> simpleMaterials_;
-    std::vector<rendr::Mesh<rendr::VertexPTN>> singleSimpleMatMeshes_;
-    std::vector<rendr::Batch<rendr::SimpleMaterial>> batches_;
     rendr::InputManager inputManager_;
     rendr::CameraManipulator camManip_;
     rendr::Camera camera_;

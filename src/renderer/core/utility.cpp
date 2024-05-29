@@ -976,10 +976,6 @@ graphicsPipeline_(nullptr),
 swapChainFramebuffers_()
 {}
 
-void RendererSetup::createDefaultSetup(const rendr::Device &device, const rendr::SwapChain &SwapChain){
-
-}
-
 
 SwapChain::SwapChain()
 : swapChain_(nullptr){}

@@ -7,71 +7,30 @@ void Application::run(){
 }
 
 void Application::init(){
-    //rendr::RenderConfig renderConfig();
-    //rendr::Renderer renderer(renderConfig);
+    rendr::RendererConfig renderConfig;
+    renderConfig.deviceConfig.deviceEnableFeatures.setSamplerAnisotropy(true);
+    renderer.init(renderConfig);
     
-    //MyMaterial mat;
-    //mat.init(renderer);
+    SimpleMaterial mat;
+    renderer.initMaterial(mat);
 
-
-
-    rendr::DeviceConfig deviceConfig;
-    deviceConfig.deviceEnableFeatures.setSamplerAnisotropy(VK_TRUE);
-    rendr::SwapChainConfig swapChainConf;
-    
-    device_.create(deviceConfig, window_);
-    swapChain_.create(device_, window_, swapChainConf);
-
-    renderPass_ = rendr::createRenderPassWithColorAndDepthAttOneSubpass(device_.device_, swapChain_.swapChainImageFormat_, rendr::findDepthFormat(device_.physicalDevice_));
-    descriptorSetLayout_ = rendr::createUboAndSamplerDescriptorSetLayout(device_.device_);
-    pipelineLayout_ = rendr::createPipelineLayout(device_.device_, {*descriptorSetLayout_}, {});
-
-    std::vector<char> vertShaderCode = rendr::readFile("C:/Dev/cpp-projects/engine/src/shaders/fvertex.spv");
-    std::vector<char> fragShaderCode = rendr::readFile("C:/Dev/cpp-projects/engine/src/shaders/ffragment.spv");
-    vk::raii::ShaderModule vertShaderModule = rendr::createShaderModule(device_.device_, vertShaderCode);
-    vk::raii::ShaderModule fragShaderModule = rendr::createShaderModule(device_.device_, fragShaderCode);
-
-    graphicsPipeline_ = rendr::createGraphicsPipelineWithDefaults(device_.device_, renderPass_, pipelineLayout_, swapChain_.swapChainExtent_, rendr::VertexPTN{},
-        vertShaderModule, fragShaderModule
-    );
-
+    //DrawableObj zen_room(Material mat);
+   
     depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
     swapChainFramebuffers_ = rendr::createSwapChainFramebuffersWithDepthAtt(device_.device_, renderPass_, swapChain_.swapChainImageViews_, depthImage_.imageView, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
     commandPool_ =  rendr::createGraphicsCommandPool(device_.device_, rendr::findQueueFamilies(*device_.physicalDevice_, *device_.surface_));
     
-    textureSampler_ = rendr::createTextureSampler(device_.device_, device_.physicalDevice_);
-
+    textureSampler = rendr::createTextureSampler(device_.device_, device_.physicalDevice_);
 
     rendr::UfbxSceneRaii fbxScene("C:/Dev/cpp-projects/engine/resources/zen-studio/source/room.fbx");
     auto meshesAndMatInd = rendr::ufbxLoadMeshesPartsSepByMaterial(fbxScene.get());  
-    auto matToMesh = rendr::mergeMeshesByMaterial(meshesAndMatInd);
-    
+    auto fbxMatToMesh = rendr::mergeMeshesByMaterial(meshesAndMatInd);
     meshesAndMatInd.clear();
     rendr::STBImageRaii walls("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_walls_baked.png");  
     rendr::STBImageRaii details("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_details_Baked.png");  
     rendr::Image wallsTextureImage = rendr::create2DTextureImage(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, std::move(walls));
     rendr::Image detailsTextureImage = rendr::create2DTextureImage(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, std::move(details));
-    rendr::SimpleMaterial wallsMat (0, std::move(wallsTextureImage));
-    rendr::SimpleMaterial detailsMat (2, std::move(detailsTextureImage));
 
-    simpleMaterials_.push_back(std::move(wallsMat));
-    simpleMaterials_.push_back(std::move(detailsMat));
-    singleSimpleMatMeshes_.push_back(std::move(matToMesh[0]));
-    singleSimpleMatMeshes_.push_back(std::move(matToMesh[2]));
-
-
-    batches_.push_back(
-    rendr::Batch(
-        rendr::createVertexBuffer(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, singleSimpleMatMeshes_[0].vertices),
-        rendr::createIndexBuffer(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, singleSimpleMatMeshes_[0].indices),
-        &simpleMaterials_[0]
-    ));
-    batches_.push_back(
-    rendr::Batch(
-        rendr::createVertexBuffer(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, singleSimpleMatMeshes_[1].vertices),
-        rendr::createIndexBuffer(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, singleSimpleMatMeshes_[1].indices),
-        &simpleMaterials_[1]
-    ));
     
     uniformBuffers_ = rendr::createAndMapUniformBuffers(device_.physicalDevice_, device_.device_, uniformBuffersMapped_, FramesInFlight, rendr::MVPUniformBufferObject());
     descriptorPool_ = rendr::createDescriptorPool(device_.device_, FramesInFlight, batches_.size());

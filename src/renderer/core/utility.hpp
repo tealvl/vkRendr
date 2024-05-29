@@ -125,11 +125,9 @@ struct DeviceConfig{
 
 class Device;
 class SwapChain;
-class RenderSetup;
+class RendererSetup;
 
-class Device{
-    //private:
-public:
+struct Device{
     rendr::Instance instance_; 
     vk::raii::SurfaceKHR surface_;
     vk::raii::PhysicalDevice physicalDevice_;
@@ -138,38 +136,33 @@ public:
     vk::raii::Queue presentQueue_;
     vk::raii::CommandPool commandPool_;
 
-    friend class rendr::SwapChain;
-    friend class rendr::RenderSetup;
-public:
     Device();
     void create(DeviceConfig config, const rendr::Window& win);
-
 };
 
-class RendererSetup{
-private:
+struct RendererSetup{
     vk::raii::DescriptorSetLayout descriptorSetLayout_;
     vk::raii::RenderPass renderPass_;
     vk::raii::PipelineLayout pipelineLayout_;
     vk::raii::Pipeline graphicsPipeline_;
     std::vector<vk::raii::Framebuffer> swapChainFramebuffers_;
-public:
     RendererSetup();
-    void createDefaultSetup(const rendr::Device& device, const rendr::SwapChain& SwapChain);
 };
 
-class SwapChain{
-//private:
-public:
+struct RendererConfig{
+    int framesInFlight = 2;
+    DeviceConfig deviceConfig;
+    SwapChainConfig swapChainConfig;
+};
+
+struct SwapChain{
     vk::raii::SwapchainKHR swapChain_;
     vk::Format swapChainImageFormat_;
     vk::Extent2D swapChainExtent_;
     std::vector<vk::Image> swapChainImages_;
     std::vector<vk::raii::ImageView> swapChainImageViews_;
-    friend class rendr::RendererSetup;
-public:
-    SwapChain();
 
+    SwapChain();
     void create(const rendr::Device&  renderDevice, const rendr::Window& win, const rendr::SwapChainConfig& config);
     void clear();
 };
@@ -194,23 +187,6 @@ struct Mesh{
     std::vector<uint32_t> indices;
 };
 
-template<typename BatchMaterial>
-struct Batch{
-    rendr::Buffer vertices;
-    rendr::Buffer indices;
-    BatchMaterial* materialPtr;
-
-    Batch(rendr::Buffer&& vert, rendr::Buffer&& ind, BatchMaterial* matIndex)
-        : vertices(std::move(vert)), indices(std::move(ind)), materialPtr(matIndex) {}
-};
-
-struct SimpleMaterial{
-    uint32_t materialIndex;
-    rendr::Image colorTexture;
-
-    SimpleMaterial(uint32_t index, rendr::Image&& texture)
-        : materialIndex(index), colorTexture(std::move(texture)) {}
-};
 
 struct DeviceWithGraphicsAndPresentQueues{
     vk::raii::Device device;
