@@ -1,5 +1,5 @@
 #pragma once
-#include "camera.hpp"
+#include "utility.hpp"
 #include "keyCodes.h"
 #include "inputManager.hpp"
 #include <glm/glm.hpp>
@@ -13,7 +13,6 @@ public:
     CameraManipulator() : camera(nullptr), inputManager(nullptr), yaw(0.0f), pitch(0.0f) {}
     
     
-
     void enableMouseCameraControl(){
         mouseCameraControl = true;
     }

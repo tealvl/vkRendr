@@ -9,19 +9,15 @@ void Application::run(){
 void Application::init(){
     rendr::RendererConfig renderConfig;
     renderConfig.deviceConfig.deviceEnableFeatures.setSamplerAnisotropy(true);
-    renderer.init(renderConfig);
+    renderer.init(renderConfig, window);
     
     SimpleMaterial mat;
     renderer.initMaterial(mat);
 
     //DrawableObj zen_room(Material mat);
    
-    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
-    swapChainFramebuffers_ = rendr::createSwapChainFramebuffersWithDepthAtt(device_.device_, renderPass_, swapChain_.swapChainImageViews_, depthImage_.imageView, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
-    commandPool_ =  rendr::createGraphicsCommandPool(device_.device_, rendr::findQueueFamilies(*device_.physicalDevice_, *device_.surface_));
     
     textureSampler = rendr::createTextureSampler(device_.device_, device_.physicalDevice_);
-
     rendr::UfbxSceneRaii fbxScene("C:/Dev/cpp-projects/engine/resources/zen-studio/source/room.fbx");
     auto meshesAndMatInd = rendr::ufbxLoadMeshesPartsSepByMaterial(fbxScene.get());  
     auto fbxMatToMesh = rendr::mergeMeshesByMaterial(meshesAndMatInd);
@@ -31,8 +27,6 @@ void Application::init(){
     rendr::Image wallsTextureImage = rendr::create2DTextureImage(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, std::move(walls));
     rendr::Image detailsTextureImage = rendr::create2DTextureImage(device_.physicalDevice_, device_.device_, device_.commandPool_, device_.graphicsQueue_, std::move(details));
 
-    
-    uniformBuffers_ = rendr::createAndMapUniformBuffers(device_.physicalDevice_, device_.device_, uniformBuffersMapped_, FramesInFlight, rendr::MVPUniformBufferObject());
     descriptorPool_ = rendr::createDescriptorPool(device_.device_, FramesInFlight, batches_.size());
     descriptorSets_ = rendr::createUboAndSamplerDescriptorSets(device_.device_, descriptorPool_, descriptorSetLayout_, uniformBuffers_,
         textureSampler_, FramesInFlight, batches_, rendr::MVPUniformBufferObject()
@@ -41,77 +35,36 @@ void Application::init(){
     framesSyncObjs_ = rendr::createSyncObjects(device_.device_, FramesInFlight);
 
 
-    window_.callbacks.winResized = [this](int,int){
-        this->framebufferResized = true;
-        this->recreateSwapChain();
-    };
-
-    inputManager_.setUpWindowCallbacks(window_);
-    camManip_.setCamera(camera_);
-    camManip_.setInputManager(inputManager_);
+    inputManager.setUpWindowCallbacks(window);
+    camManip.setCamera(camera);
+    camManip.setInputManager(inputManager);
 }
 
 void Application::mainLoop(){
-    while (!window_.shouldClose()) {
-        window_.pollEvents();
-        timer_.update();
+    while (!window.shouldClose()) {
+        window.pollEvents();
+        timer.update();
         
         //TODO вынести 
-        if(inputManager_.isKeyPressed('Q')){
-            camManip_.enableMouseCameraControl();
-            window_.disableCursor();  
+        if(inputManager.isKeyPressed('Q')){
+            camManip.enableMouseCameraControl();
+            window.disableCursor();  
         }
-        if(inputManager_.isKeyPressed('E')){
-            camManip_.disableMouseCameraControl();
-            window_.enableCursor();
+        if(inputManager.isKeyPressed('E')){
+            camManip.disableMouseCameraControl();
+            window.enableCursor();
         }
 
-        camManip_.update(timer_.getDeltaTime());
-        inputManager_.resetInputOffsets();
+        camManip.update(timer.getDeltaTime());
+        inputManager.resetInputOffsets();
 
-        //renderer.setDrawableObjs(vec<DrawableObj>)
-        //renderer.drawFrame();
-        drawFrame();
+        rendr::MVPUniformBufferObject ubo = camera.getMVPubo(0.1f, renderer.getSwapChainAspect());
+        renderer.updateUniformBuffer(ubo);
+        //renderer.setDrawableObjs();
+        renderer.drawFrame();
     }
-    device_.device_.waitIdle();
+    renderer.waitIdle();
 }
-
-void Application::cleanupSwapChain() {
-    // Освобождаем framebuffers
-    for (auto& framebuffer : swapChainFramebuffers_) {
-        framebuffer.clear();
-    }
-
-    // Освобождаем depth image
-    depthImage_.imageView.clear();
-    depthImage_.image.clear();
-    depthImage_.imageMemory.clear();
-
-    // Освобождаем swap chain
-    swapChain_.clear();
-}
-
-void Application::recreateSwapChain() {
-    auto size = window_.getFramebufferSize();
-    int width = size.first;
-    int height = size.second;
-    while (width == 0 || height == 0) {
-        size = window_.getFramebufferSize();
-        width = size.first;
-        height = size.second;
-        window_.waitEvents();
-    }
-
-    device_.device_.waitIdle();
-
-    cleanupSwapChain();
-
-    
-    swapChain_.create(device_, window_, rendr::SwapChainConfig());
-
-    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
-    swapChainFramebuffers_ = rendr::createSwapChainFramebuffersWithDepthAtt(device_.device_, renderPass_, swapChain_.swapChainImageViews_, depthImage_.imageView, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
-}    
 
 void Application::recordCommandBuffer(const vk::raii::CommandBuffer& commandBuffer, uint32_t imageIndex) {
     vk::CommandBufferBeginInfo beginInfo(
@@ -164,62 +117,4 @@ void Application::recordCommandBuffer(const vk::raii::CommandBuffer& commandBuff
 
     commandBuffer.endRenderPass();
     commandBuffer.end();
-}
-
-void Application::drawFrame() {
-    
-    vk::Result waitFanceRes = device_.device_.waitForFences({*framesSyncObjs_[currentFrame].inFlightFence}, VK_TRUE, UINT64_MAX);
-
-    std::pair<vk::Result, uint32_t> imageAcqRes = swapChain_.swapChain_.acquireNextImage(UINT64_MAX, 
-        *framesSyncObjs_[currentFrame].imageAvailableSemaphore, nullptr);
-
-    uint32_t imageIndex = imageAcqRes.second;
-
-    updateUniformBuffer(currentFrame);
-
-    device_.device_.resetFences({*framesSyncObjs_[currentFrame].inFlightFence});
-
-    commandBuffers_[currentFrame].reset();
-    recordCommandBuffer(commandBuffers_[currentFrame], imageIndex);
-
-    vk::PipelineStageFlags waitStages = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-
-    vk::SubmitInfo submitInfo(
-        1, // waitSemaphoreCount
-        &(*framesSyncObjs_[currentFrame].imageAvailableSemaphore), // pWaitSemaphores
-        &waitStages, // pWaitDstStageMask
-        1, // commandBufferCount
-        &(*commandBuffers_[currentFrame]), // pCommandBuffers
-        1, // signalSemaphoreCount
-        &(*framesSyncObjs_[currentFrame].renderFinishedSemaphore) // pSignalSemaphores
-    );
-
-    device_.graphicsQueue_.submit({submitInfo}, *framesSyncObjs_[currentFrame].inFlightFence);
-
-    vk::PresentInfoKHR presentInfo(
-        1, // waitSemaphoreCount
-        &(*framesSyncObjs_[currentFrame].renderFinishedSemaphore), // pWaitSemaphores
-        1, // swapchainCount
-        &(*swapChain_.swapChain_), // pSwapchains
-        &imageIndex // pImageIndices
-    );
-    
-    vk::Result presenrRes = device_.presentQueue_.presentKHR(presentInfo);
-
-    currentFrame = (currentFrame + 1) % FramesInFlight;
-}
-
-void Application::updateUniformBuffer(uint32_t currentFrame){
-    camera_.aspect = swapChain_.swapChainExtent_.width / (float) swapChain_.swapChainExtent_.height;
-    
-    rendr::MVPUniformBufferObject ubo;
-    //ubo.model = glm::rotate(model_matrix_.model_, glm::radians(270.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    ubo.model = glm::scale(model_matrix_.model_, glm::vec3(0.01f, 0.01f, 0.01f));
-    ubo.view = glm::lookAt(camera_.pos, camera_.look_at_pos, camera_.worldUp);
-
-    ubo.proj = glm::perspective(camera_.fov, camera_.aspect, camera_.near_plane, camera_.far_plane);
-
-    ubo.proj[1][1] *= -1;
-
-    memcpy(uniformBuffersMapped_[currentFrame], &ubo, sizeof(ubo));
 }

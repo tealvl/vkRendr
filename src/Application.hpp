@@ -45,9 +45,7 @@ public:
     : 
     glwfContext_(), 
     window_(), 
-    renderer(),
-
-    
+    renderer()
     {}
 
 private:
@@ -55,38 +53,17 @@ private:
     rendr::Window window;
     rendr::Renderer renderer;
 
-    rendr::Image depthImage_;
-
-    std::vector<vk::raii::CommandBuffer> commandBuffers_;
-    std::vector<rendr::PerFrameSync> framesSyncObjs_;
-
-    uint32_t currentFrame = 0;
-    bool framebufferResized;
-
-    rendr::Buffer vertexBuffer_;
-    rendr::Buffer indexBuffer_;
-
-    std::vector<rendr::Buffer> uniformBuffers_;
-    std::vector<void*> uniformBuffersMapped_;
-
     vk::raii::DescriptorPool descriptorPool_;
     std::vector<std::vector<vk::raii::DescriptorSet>> descriptorSets_;
     
     rendr::Image textureImage;
     vk::raii::Sampler textureSampler;
 
-
-    rendr::InputManager inputManager_;
-    rendr::CameraManipulator camManip_;
-    rendr::Camera camera_;
-    rendr::Transform model_matrix_;
-    Timer timer_;
+    rendr::InputManager inputManager;
+    rendr::CameraManipulator camManip;
+    rendr::Camera camera;
+    Timer timer;
     
     void init();
     void mainLoop();
-    void cleanupSwapChain();
-    void recreateSwapChain();
-    void recordCommandBuffer(const vk::raii::CommandBuffer &commandBuffer, uint32_t imageIndex);
-    void drawFrame();
-    void updateUniformBuffer(uint32_t currentImage);
 };

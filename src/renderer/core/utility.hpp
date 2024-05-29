@@ -18,6 +18,7 @@
 #include "window.hpp"
 #include "stb_image.h"
 #include "ufbx.h"
+#include "renderer.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -146,6 +147,7 @@ struct RendererSetup{
     vk::raii::PipelineLayout pipelineLayout_;
     vk::raii::Pipeline graphicsPipeline_;
     std::vector<vk::raii::Framebuffer> swapChainFramebuffers_;
+    std::function<void(const rendr::Renderer&)> swapChainFramebuffersRecreationFunc_;
     RendererSetup();
 };
 
@@ -633,6 +635,27 @@ vk::raii::Pipeline createGraphicsPipelineWithDefaults(
     );
 }
 
+struct Camera
+{   
+    constexpr static const glm::vec3 worldUp{0.0f, 1.0f, 0.0f};
+    glm::vec3 pos{1.0f, 1.0f, 1.0f};
+    glm::vec3 look_at_pos{0.0f, 0.0f, 0.0f};
+
+    float fov = 45.0f;
+    float aspect = 16.0f / 9.0f;
+    float near_plane = 0.1f;
+    float far_plane = 1000.0f;
+
+    rendr::MVPUniformBufferObject getMVPubo(float scale, float cameraAspect){
+        rendr::MVPUniformBufferObject ubo;
+        ubo.model = glm::scale(glm::mat4{1.0f}, glm::vec3(scale, scale, scale));
+        ubo.view = glm::lookAt(pos, look_at_pos, worldUp);
+        ubo.proj = glm::perspective(fov, cameraAspect, near_plane, far_plane);
+        ubo.proj[1][1] *= -1;
+        return ubo;
+    }
+};
+
 template<typename VertexType>
 std::map<uint32_t, rendr::Mesh<VertexType>> mergeMeshesByMaterial(const std::vector<std::pair<rendr::Mesh<VertexType>, uint32_t>>& meshesAndMatInd) {
     
@@ -741,6 +764,70 @@ std::vector<std::vector<vk::raii::DescriptorSet>> createUboAndSamplerDescriptorS
     }
     return allDescriptorSets;
 }
+
+
+class DrawableObj;
+class Material;
+
+class Renderer{
+private:
+    int framesInFlight_;  
+    int currentFrame_;
+    int matIndCount_ = 0;
+    rendr::Device device_;
+    rendr::SwapChain swapChain_;
+    rendr::SwapChainConfig swapChainConfig_;
+    rendr::Image depthImage_;
+    std::map<int, rendr::RendererSetup> rendrSetups_;
+    std::vector<vk::raii::CommandBuffer> commandBuffers_;
+    std::vector<rendr::PerFrameSync> framesSyncObjs_;
+    std::vector<rendr::Buffer> uniformBuffers_;
+    std::vector<void*> uniformBuffersMapped_;
+
+    std::map<int, std::vector<rendr::DrawableObj*>> setupIndexToDrawableObjs;
+
+    void cleanupSwapChain();
+    
+public:
+    void drawFrame();
+    void setDrawableObjects(const std::vector<rendr::DrawableObj>& objs);
+    void initMaterial(Material& material);
+    void init(const RendererConfig& config, rendr::Window& win);
+    void recreateSwapChain(const rendr::Window& window);
+    void waitIdle();
+    void updateUniformBuffer(rendr::MVPUniformBufferObject ubo);
+    float getSwapChainAspect();
+
+    const rendr::Device& getDevice() const{
+        return device_;
+    }
+
+    const rendr::SwapChain& getSwapChain() const{
+        return swapChain_;
+    }
+    const rendr::Image& getDepthImage() const{
+        return depthImage_;
+    }
+   
+private:
+    void recordCommandBuffer();    
+};
+
+struct Material{
+    int renderSetupIndex = -1;
+    virtual RendererSetup createRendererSetup(const rendr::Renderer& renderer){};
+    virtual ~Material() = default;
+};
+
+struct DrawableObj {
+    Material* renderMaterial;
+    virtual void bindResources(const vk::raii::CommandBuffer& buffer) = 0;
+    virtual ~DrawableObj() = default;
+};
+
+
+
+
 
 
 }

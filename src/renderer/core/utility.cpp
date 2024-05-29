@@ -1141,4 +1141,132 @@ vk::raii::Instance const &Instance::operator*() const{
 }
 
 
+void Renderer::cleanupSwapChain(){
+    for(auto& setup : rendrSetups_){
+        setup.second.swapChainFramebuffers_.clear();
+    }
+
+    depthImage_.imageView.clear();
+    depthImage_.image.clear();
+    depthImage_.imageMemory.clear();
+    swapChain_.clear();
+}
+
+void Renderer::updateUniformBuffer(rendr::MVPUniformBufferObject ubo){
+    memcpy(uniformBuffersMapped_[currentFrame_], &ubo, sizeof(ubo));
+}
+
+void Renderer::drawFrame(){
+    vk::Result waitFanceRes = device_.device_.waitForFences({*framesSyncObjs_[currentFrame_].inFlightFence}, VK_TRUE, UINT64_MAX);
+
+    std::pair<vk::Result, uint32_t> imageAcqRes = swapChain_.swapChain_.acquireNextImage(UINT64_MAX, 
+        *framesSyncObjs_[currentFrame_].imageAvailableSemaphore, nullptr);
+
+    uint32_t imageIndex = imageAcqRes.second;
+
+    device_.device_.resetFences({*framesSyncObjs_[currentFrame_].inFlightFence});
+
+    commandBuffers_[currentFrame_].reset();
+    recordCommandBuffer(commandBuffers_[currentFrame_], imageIndex);
+
+    vk::PipelineStageFlags waitStages = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+
+    vk::SubmitInfo submitInfo(
+        1, // waitSemaphoreCount
+        &(*framesSyncObjs_[currentFrame_].imageAvailableSemaphore), // pWaitSemaphores
+        &waitStages, // pWaitDstStageMask
+        1, // commandBufferCount
+        &(*commandBuffers_[currentFrame_]), // pCommandBuffers
+        1, // signalSemaphoreCount
+        &(*framesSyncObjs_[currentFrame_].renderFinishedSemaphore) // pSignalSemaphores
+    );
+
+    device_.graphicsQueue_.submit({submitInfo}, *framesSyncObjs_[currentFrame_].inFlightFence);
+
+    vk::PresentInfoKHR presentInfo(
+        1, // waitSemaphoreCount
+        &(*framesSyncObjs_[currentFrame_].renderFinishedSemaphore), // pWaitSemaphores
+        1, // swapchainCount
+        &(*swapChain_.swapChain_), // pSwapchains
+        &imageIndex // pImageIndices
+    );
+    
+    vk::Result presenrRes = device_.presentQueue_.presentKHR(presentInfo);
+
+    currentFrame_ = (currentFrame_ + 1) % framesInFlight_;
+
+}
+
+void Renderer::setDrawableObjects(const std::vector<DrawableObj> &objs){
+    
+}
+
+void Renderer::initMaterial(Material& material){
+    material.renderSetupIndex = matIndCount_;
+    rendrSetups_[matIndCount_] = material.createRendererSetup(*this);
+    matIndCount_++;
+}
+
+void Renderer::recreateSwapChain(const rendr::Window& window){
+    auto size = window.getFramebufferSize();
+    int width = size.first;
+    int height = size.second;
+    while (width == 0 || height == 0) {
+        size = window.getFramebufferSize();
+        width = size.first;
+        height = size.second;
+        window.waitEvents();
+    }
+    device_.device_.waitIdle();
+    cleanupSwapChain();
+    swapChain_.create(device_, window, swapChainConfig_);
+
+    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
+
+    for(auto& setup : rendrSetups_){
+        setup.second.swapChainFramebuffersRecreationFunc_(*this);
+    }
+}
+
+void Renderer::waitIdle(){
+    device_.device_.waitIdle();
+}
+
+float Renderer::getSwapChainAspect(){
+    return swapChain_.swapChainExtent_.width / (float) swapChain_.swapChainExtent_.height;
+}
+
+void Renderer::init(const RendererConfig& config, rendr::Window& window){
+    framesInFlight_ = config.framesInFlight;
+    device_.create(config.deviceConfig, window);
+    swapChain_.create(device_, window, config.swapChainConfig);
+    swapChainConfig_ = config.swapChainConfig;
+    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
+    uniformBuffers_ = rendr::createAndMapUniformBuffers(device_.physicalDevice_, device_.device_, uniformBuffersMapped_, framesInFlight_, rendr::MVPUniformBufferObject());
+    commandBuffers_ = rendr::createCommandBuffers(device_.device_, device_.commandPool_, framesInFlight_);
+    framesSyncObjs_ = rendr::createSyncObjects(device_.device_, framesInFlight_);
+
+    window.callbacks.winResized = [this, &window](int,int){
+        this->recreateSwapChain(window);
+    };
+}
+
+void Renderer::recordCommandBuffer()
+{
+    for (int i = 0; i < setupIndexToDrawableObjs.size(); ++i ) {
+
+        // commandBuffer.setViewport(0, viewport);
+        // commandBuffer.setScissor(0, scissor);
+        // commandBuffer.beginRenderPass(rendrSetups_[i].renderPass_, vk::SubpassContents::eInline);
+        // commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *rendrSetups_[i].graphicsPipeline);
+        //for(DrawableObj& obj : setupIndexToDrawableObjs[i]){
+            //obj.bindResources(commandBuffer);            
+            //нужно знать кол-во индексов
+            // commandBuffer.drawIndexed(static_cast<uint32_t>(singleSimpleMatMeshes_[batchIndex].indices.size()), 1, 0, 0, 0);
+            // commandBuffer.endRenderPass();
+        //}        
+    }
+    // commandBuffer.end();
+}
+
 }
