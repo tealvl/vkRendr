@@ -2,7 +2,10 @@
 #include "utility.hpp"
 
 class SimpleMaterial : public rendr::Material{
-    rendr::RendererSetup createRendererSetup(const rendr::Renderer& renderer, int framesInFlight) override{
+    rendr::RendererSetup createRendererSetup(
+        const rendr::Renderer& renderer, 
+        const vk::raii::DescriptorSetLayout& rendererDescriptorSetLayout,  
+        int framesInFlight) override{
         
         const rendr::Device& device = renderer.getDevice();
         const rendr::SwapChain& swapChain = renderer.getSwapChain();
@@ -10,8 +13,8 @@ class SimpleMaterial : public rendr::Material{
 
         rendr::RendererSetup setup;
         setup.renderPass_ = rendr::createRenderPassWithColorAndDepthAttOneSubpass(device.device_, swapChain.swapChainImageFormat_, rendr::findDepthFormat(device.physicalDevice_));
-        setup.descriptorSetLayout_ = rendr::createUboAndSamplerDescriptorSetLayout(device.device_);
-        setup.pipelineLayout_ = rendr::createPipelineLayout(device.device_, {*setup.descriptorSetLayout_}, {});
+        setup.descriptorSetLayout_ = rendr::createSamplerDescriptorSetLayout(device.device_);
+        setup.pipelineLayout_ = rendr::createPipelineLayout(device.device_, {*rendererDescriptorSetLayout, *setup.descriptorSetLayout_}, {});
 
         std::vector<char> vertShaderCode = rendr::readFile("C:/Dev/cpp-projects/engine/src/shaders/fvertex.spv");
         std::vector<char> fragShaderCode = rendr::readFile("C:/Dev/cpp-projects/engine/src/shaders/ffragment.spv");

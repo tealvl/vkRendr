@@ -351,6 +351,34 @@ std::vector<vk::raii::DescriptorSet> createDescriptorSets(
     return descriptorSets;
 }
 
+vk::raii::DescriptorSetLayout createUboDescriptorSetLayout(const vk::raii::Device& device) {
+    vk::DescriptorSetLayoutBinding uboLayoutBinding(
+        0, // binding
+        vk::DescriptorType::eUniformBuffer,
+        1, // descriptorCount
+        vk::ShaderStageFlagBits::eVertex,
+        nullptr
+    );
+
+    std::vector<vk::DescriptorSetLayoutBinding> bindings = {uboLayoutBinding};
+
+    return createDescriptorSetLayout(device, bindings);
+}
+
+vk::raii::DescriptorSetLayout createSamplerDescriptorSetLayout(const vk::raii::Device& device) {
+    vk::DescriptorSetLayoutBinding samplerLayoutBinding(
+        0,  // binding
+        vk::DescriptorType::eCombinedImageSampler,
+        1, // descriptorCount
+        vk::ShaderStageFlagBits::eFragment,
+        nullptr
+    );
+
+    std::vector<vk::DescriptorSetLayoutBinding> bindings = {samplerLayoutBinding};
+
+    return createDescriptorSetLayout(device, bindings);
+}
+
 
 vk::raii::DescriptorSetLayout createUboAndSamplerDescriptorSetLayout(const vk::raii::Device& device) {
     vk::DescriptorSetLayoutBinding uboLayoutBinding(
@@ -1172,7 +1200,11 @@ void Renderer::updateUniformBuffer(rendr::MVPUniformBufferObject ubo){
     memcpy(uniformBuffersMapped_[currentFrame_], &ubo, sizeof(ubo));
 }
 
-void Renderer::drawFrame(){
+Renderer::Renderer()
+: descriptorSetLayout_(nullptr), descriptorPool_(nullptr){}
+
+void Renderer::drawFrame()
+{
     vk::Result waitFanceRes = device_.device_.waitForFences({*framesSyncObjs_[currentFrame_].inFlightFence}, VK_TRUE, UINT64_MAX);
 
     std::pair<vk::Result, uint32_t> imageAcqRes = swapChain_.swapChain_.acquireNextImage(UINT64_MAX, 
@@ -1210,7 +1242,6 @@ void Renderer::drawFrame(){
     vk::Result presenrRes = device_.presentQueue_.presentKHR(presentInfo);
 
     currentFrame_ = (currentFrame_ + 1) % framesInFlight_;
-
 }
 
 void Renderer::setDrawableObjects(std::vector<IDrawableObj*> objs){
@@ -1226,7 +1257,7 @@ void Renderer::setDrawableObjects(std::vector<IDrawableObj*> objs){
 
 void Renderer::initMaterial(Material& material){
     material.renderSetupIndex = matIndCount_;
-    rendrSetups_[matIndCount_] = material.createRendererSetup(*this, framesInFlight_);
+    rendrSetups_[matIndCount_] = material.createRendererSetup(*this, descriptorSetLayout_, framesInFlight_);
     matIndCount_++;
 }
 
@@ -1269,6 +1300,31 @@ void Renderer::init(const RendererConfig& config, rendr::Window& window){
     commandBuffers_ = rendr::createCommandBuffers(device_.device_, device_.commandPool_, framesInFlight_);
     framesSyncObjs_ = rendr::createSyncObjects(device_.device_, framesInFlight_);
 
+    descriptorSetLayout_ = rendr::createUboDescriptorSetLayout(device_.device_);
+    descriptorPool_ = rendr::createDescriptorPool(device_.device_, framesInFlight_);
+    descriptorSets_ = rendr::createDescriptorSets(device_.device_, descriptorPool_, descriptorSetLayout_, framesInFlight_);
+
+    for(int i = 0; i < framesInFlight_; i++){
+        vk::DescriptorBufferInfo bufferInfo(
+            *uniformBuffers_[i].buffer, // buffer
+            0, // offset
+            sizeof(rendr::MVPUniformBufferObject) // range
+        );
+
+        std::array<vk::WriteDescriptorSet, 1> descriptorWrites = {
+            vk::WriteDescriptorSet(
+                *descriptorSets_[i], // dstSet
+                0, // dstBinding
+                0, // dstArrayElement
+                1, // descriptorCount
+                vk::DescriptorType::eUniformBuffer, // descriptorType
+                nullptr, // pImageInfo  
+                &bufferInfo, // pBufferInfo
+                nullptr // pTexelBufferView
+            )};
+        device_.device_.updateDescriptorSets(descriptorWrites, nullptr);
+    }
+    
     window.callbacks.winResized = [this, &window](int,int){
         this->recreateSwapChain(window);
     };
@@ -1276,6 +1332,7 @@ void Renderer::init(const RendererConfig& config, rendr::Window& window){
 
 void Renderer::recordCommandBuffer(uint32_t imageIndex){
     vk::raii::CommandBuffer& commandBuffer = commandBuffers_[currentFrame_];
+    
     vk::CommandBufferBeginInfo beginInfo(
         {}, // flags
         nullptr // pInheritanceInfo
@@ -1310,29 +1367,8 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex){
         vk::Rect2D scissor({0, 0}, swapChain_.swapChainExtent_);
         commandBuffer.setScissor(0, scissor);
 
-        vk::DescriptorBufferInfo bufferInfo(
-            *uniformBuffers_[currentFrame_].buffer, // buffer
-            0, // offset
-            sizeof(rendr::MVPUniformBufferObject) // range
-        );
-
-        std::array<vk::WriteDescriptorSet, 1> descriptorWrites = {
-            vk::WriteDescriptorSet(
-                *setup.descriptorSets_[currentFrame_], // dstSet
-                0, // dstBinding
-                0, // dstArrayElement
-                1, // descriptorCount
-                vk::DescriptorType::eUniformBuffer, // descriptorType
-                nullptr, // pImageInfo
-                &bufferInfo, // pBufferInfo
-                nullptr // pTexelBufferView
-            )};
-
-        device_.device_.updateDescriptorSets(descriptorWrites, nullptr);
-
         for(auto& obj : objs.second){
-            obj->bindResources(device_.device_, commandBuffer, setup.descriptorSets_[currentFrame_]);  
-            commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *setup.pipelineLayout_, 0, *setup.descriptorSets_[currentFrame_],{});
+            obj->bindResources(device_.device_, commandBuffer, setup.pipelineLayout_,descriptorSets_[currentFrame_] , currentFrame_);  
 
             commandBuffer.drawIndexed(obj->getNumOfDrawIndices(), 1, 0, 0, 0);
         }

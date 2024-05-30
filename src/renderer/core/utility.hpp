@@ -348,6 +348,8 @@ vk::raii::RenderPass createRenderPassWithColorAndDepthAttOneSubpass(const vk::ra
 
 vk::raii::DescriptorSetLayout createDescriptorSetLayout(const vk::raii::Device &device, std::vector<vk::DescriptorSetLayoutBinding> bindings);
 
+vk::raii::DescriptorSetLayout createSamplerDescriptorSetLayout(const vk::raii::Device &device);
+
 vk::raii::DescriptorSetLayout createUboAndSamplerDescriptorSetLayout(const vk::raii::Device &device);
 
 vk::raii::ShaderModule createShaderModule(const vk::raii::Device &device, const std::vector<char> &code);
@@ -707,6 +709,8 @@ std::vector<vk::raii::DescriptorSet> createDescriptorSets(
     int maxFramesInFlight
 );
 
+vk::raii::DescriptorSetLayout createUboDescriptorSetLayout(const vk::raii::Device &device);
+
 class IDrawableObj;
 class Material;
 class DrawableObj;
@@ -714,7 +718,7 @@ class DrawableObj;
 class Renderer{
 private:
     int framesInFlight_;  
-    int currentFrame_;
+    int currentFrame_ = 0;
     int matIndCount_ = 0;
     rendr::Device device_;
     rendr::SwapChain swapChain_;
@@ -726,11 +730,16 @@ private:
     std::vector<rendr::Buffer> uniformBuffers_;
     std::vector<void*> uniformBuffersMapped_;
 
+    vk::raii::DescriptorSetLayout descriptorSetLayout_;
+    vk::raii::DescriptorPool descriptorPool_;
+    std::vector<vk::raii::DescriptorSet> descriptorSets_;
+
     std::map<int, std::vector<rendr::IDrawableObj*>> setupIndexToDrawableObjs;
 
     void cleanupSwapChain();
     void recordCommandBuffer(uint32_t imageIndex); 
 public:
+    Renderer();
     void drawFrame();
     void setDrawableObjects(std::vector<IDrawableObj*> objs);
     void initMaterial(Material& material);
@@ -739,6 +748,11 @@ public:
     void waitIdle();
     void updateUniformBuffer(rendr::MVPUniformBufferObject ubo);
     float getSwapChainAspect();
+    
+    
+    const rendr::RendererSetup& getRenderSetup(int setupIndex) const{
+        return rendrSetups_.at(setupIndex);
+    }
 
     const rendr::Device& getDevice() const{
         return device_;
@@ -759,7 +773,10 @@ public:
 
 struct Material{
     int renderSetupIndex = -1;
-    virtual RendererSetup createRendererSetup(const rendr::Renderer& renderer, int framesInFlight){
+    virtual RendererSetup createRendererSetup(const rendr::Renderer& renderer,
+        const vk::raii::DescriptorSetLayout& rendererDescriptorSetLayout,
+        int framesInFlight){
+
         return RendererSetup();
     };
     virtual ~Material() = default;
@@ -768,25 +785,15 @@ struct Material{
 struct IDrawableObj {
     IDrawableObj(Material& mat) : renderMaterial(&mat){}
     Material* renderMaterial;
-    virtual void bindResources(const vk::raii::Device& device, const vk::raii::CommandBuffer& buffer, const vk::raii::DescriptorSet& dstDescrSet){};
+    virtual void bindResources(
+        const vk::raii::Device& device, 
+        const vk::raii::CommandBuffer& buffer, 
+        const vk::raii::PipelineLayout& layout, 
+        const vk::raii::DescriptorSet& rendererUboDescriptorSet,
+        int curFrame){};
     virtual size_t getNumOfDrawIndices(){return 0;};
     virtual ~IDrawableObj() = default;
 };
-
-
-struct DrawableObj{
-    IDrawableObj obj;
-    void bindResources(const vk::raii::Device& device, const vk::raii::CommandBuffer& buffer, const vk::raii::DescriptorSet& dstDescrSet){
-        obj.bindResources(device, buffer, dstDescrSet);
-    }
-    size_t getNumOfDrawIndices(){
-        return obj.getNumOfDrawIndices();
-    }
-};
-
-
-
-
 
 }
 
