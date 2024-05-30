@@ -786,11 +786,7 @@ struct IDrawableObj {
     IDrawableObj(Material& mat) : renderMaterial(&mat){}
     Material* renderMaterial;
     virtual void bindResources(
-        const vk::raii::Device& device, 
-        const vk::raii::CommandBuffer& buffer, 
-        const vk::raii::PipelineLayout& layout, 
-        const vk::raii::DescriptorSet& rendererUboDescriptorSet,
-        int curFrame){};
+        const vk::raii::Device& device, const vk::raii::CommandBuffer& buffer, const vk::raii::PipelineLayout& layout, int curFrame){};
     virtual size_t getNumOfDrawIndices(){return 0;};
     virtual ~IDrawableObj() = default;
 };

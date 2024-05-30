@@ -1367,8 +1367,10 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex){
         vk::Rect2D scissor({0, 0}, swapChain_.swapChainExtent_);
         commandBuffer.setScissor(0, scissor);
 
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *setup.pipelineLayout_, 0, *descriptorSets_[currentFrame_],{});
+        
         for(auto& obj : objs.second){
-            obj->bindResources(device_.device_, commandBuffer, setup.pipelineLayout_,descriptorSets_[currentFrame_] , currentFrame_);  
+            obj->bindResources(device_.device_, commandBuffer, setup.pipelineLayout_, currentFrame_);  
 
             commandBuffer.drawIndexed(obj->getNumOfDrawIndices(), 1, 0, 0, 0);
         }

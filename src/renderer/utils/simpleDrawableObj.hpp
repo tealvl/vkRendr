@@ -64,11 +64,10 @@ public:
     void bindResources(
         const vk::raii::Device& device, 
         const vk::raii::CommandBuffer& buffer, 
-        const vk::raii::PipelineLayout& layout, 
-        const vk::raii::DescriptorSet& rendererUboDescriptorSet, 
+        const vk::raii::PipelineLayout& layout,
         int curFrame) override{
     
-        buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *layout, 0, {*rendererUboDescriptorSet,*descriptorSets[curFrame]}, {});
+        buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *layout, 1, {*descriptorSets[curFrame]}, {});
         buffer.bindVertexBuffers(0, *vertexBuffer.buffer, {0});
         buffer.bindIndexBuffer(*indexBuffer.buffer, 0, vk::IndexType::eUint32);
     }
