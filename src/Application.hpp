@@ -54,13 +54,8 @@ private:
     rendr::Window window;
     rendr::Renderer renderer;
 
-    MeshWithTextureObj walls;
-    MeshWithTextureObj details;
-
-    vk::raii::DescriptorPool descriptorPool_;
-    std::vector<std::vector<vk::raii::DescriptorSet>> descriptorSets_;
-    
-    vk::raii::Sampler textureSampler;
+    SimpleMaterial material;
+    std::vector<MeshWithTextureObj> objsToDraw;
 
     rendr::InputManager inputManager;
     rendr::CameraManipulator camManip;

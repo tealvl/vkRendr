@@ -147,7 +147,10 @@ struct RendererSetup{
     vk::raii::PipelineLayout pipelineLayout_;
     vk::raii::Pipeline graphicsPipeline_;
     std::vector<vk::raii::Framebuffer> swapChainFramebuffers_;
-    std::function<void(const rendr::Renderer&)> swapChainFramebuffersRecreationFunc_;
+    std::function<void(const rendr::Renderer&, rendr::RendererSetup& setup)> swapChainFramebuffersRecreationFunc_;
+    vk::raii::DescriptorPool descriptorPool_;
+    std::vector<vk::raii::DescriptorSet> descriptorSets_;
+
     RendererSetup();
 };
 
@@ -389,7 +392,7 @@ rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, 
 
 std::vector<rendr::Buffer> createAndMapUniformBuffers(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, std::vector<void *> &uniformBuffersMappedData, size_t numOfBuffers, MVPUniformBufferObject ubo);
 
-vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device &device, uint32_t maxFramesInFlight, uint32_t batchCount);
+vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device &device, uint32_t maxFramesInFlight);
 
 std::vector<vk::raii::CommandBuffer> createCommandBuffers(const vk::raii::Device &device, const vk::raii::CommandPool &commandPool, uint32_t framesInFlight);
 
@@ -697,77 +700,16 @@ std::map<uint32_t, rendr::Mesh<VertexType>> mergeMeshesByMaterial(const std::vec
     return materialToMesh;
 }
 
-
-template<typename MaterialType>
-std::vector<std::vector<vk::raii::DescriptorSet>> createUboAndSamplerDescriptorSets(
+std::vector<vk::raii::DescriptorSet> createDescriptorSets(    
     const vk::raii::Device& device,  
     const vk::raii::DescriptorPool& descriptorPool,
     const vk::raii::DescriptorSetLayout& descriptorSetLayout, 
-    const std::vector<rendr::Buffer>& uniformBuffers, 
-    const vk::raii::Sampler& textureSampler,
-    uint32_t maxFramesInFlight, 
-    const std::vector<rendr::Batch<MaterialType>>& batches,
-    MVPUniformBufferObject ubo){ 
+    int maxFramesInFlight
+);
 
-   std::vector<std::vector<vk::raii::DescriptorSet>> allDescriptorSets(maxFramesInFlight);
-
-    for (uint32_t frameIndex = 0; frameIndex < maxFramesInFlight; ++frameIndex) {
-        std::vector<vk::DescriptorSetLayout> layouts(batches.size(), *descriptorSetLayout);
-        vk::DescriptorSetAllocateInfo allocInfo(
-            *descriptorPool, // descriptorPool
-            layouts // setLayouts
-        );
-
-        std::vector<vk::raii::DescriptorSet> descriptorSets = device.allocateDescriptorSets(allocInfo);
-        allDescriptorSets[frameIndex] = std::move(descriptorSets);
-
-        for (size_t batchIndex = 0; batchIndex < batches.size(); ++batchIndex) {
-            const auto& batch = batches[batchIndex];
-
-            vk::DescriptorBufferInfo bufferInfo(
-                *uniformBuffers[frameIndex].buffer, // buffer
-                0, // offset
-                sizeof(ubo) // range
-            );
-
-            vk::DescriptorImageInfo imageInfo(
-                *textureSampler, // sampler
-                *(batch.materialPtr->colorTexture.imageView),
-                vk::ImageLayout::eShaderReadOnlyOptimal // imageLayout
-            );
-
-            std::array<vk::WriteDescriptorSet, 2> descriptorWrites = {
-                vk::WriteDescriptorSet(
-                    *allDescriptorSets[frameIndex][batchIndex], // dstSet
-                    0, // dstBinding
-                    0, // dstArrayElement
-                    1, // descriptorCount
-                    vk::DescriptorType::eUniformBuffer, // descriptorType
-                    nullptr, // pImageInfo
-                    &bufferInfo, // pBufferInfo
-                    nullptr // pTexelBufferView
-                ),
-                vk::WriteDescriptorSet(
-                    *allDescriptorSets[frameIndex][batchIndex], // dstSet
-                    1, // dstBinding
-                    0, // dstArrayElement
-                    1, // descriptorCount
-                    vk::DescriptorType::eCombinedImageSampler, // descriptorType
-                    &imageInfo, // pImageInfo
-                    nullptr, // pBufferInfo
-                    nullptr // pTexelBufferView
-                )
-            };
-
-            device.updateDescriptorSets(descriptorWrites, nullptr);
-        }
-    }
-    return allDescriptorSets;
-}
-
-
-class DrawableObj;
+class IDrawableObj;
 class Material;
+class DrawableObj;
 
 class Renderer{
 private:
@@ -784,13 +726,13 @@ private:
     std::vector<rendr::Buffer> uniformBuffers_;
     std::vector<void*> uniformBuffersMapped_;
 
-    std::map<int, std::vector<rendr::DrawableObj*>> setupIndexToDrawableObjs;
+    std::map<int, std::vector<rendr::IDrawableObj*>> setupIndexToDrawableObjs;
 
     void cleanupSwapChain();
-    
+    void recordCommandBuffer(uint32_t imageIndex); 
 public:
     void drawFrame();
-    void setDrawableObjects(const std::vector<rendr::DrawableObj>& objs);
+    void setDrawableObjects(std::vector<IDrawableObj*> objs);
     void initMaterial(Material& material);
     void init(const RendererConfig& config, rendr::Window& win);
     void recreateSwapChain(const rendr::Window& window);
@@ -809,25 +751,38 @@ public:
     const rendr::Image& getDepthImage() const{
         return depthImage_;
     }
-   
-private:
-    void recordCommandBuffer();    
+
+    const int getNumOfFramesInFlight() const{
+        return framesInFlight_;
+    }
 };
 
 struct Material{
     int renderSetupIndex = -1;
-    virtual RendererSetup createRendererSetup(const rendr::Renderer& renderer){};
+    virtual RendererSetup createRendererSetup(const rendr::Renderer& renderer, int framesInFlight){
+        return RendererSetup();
+    };
     virtual ~Material() = default;
 };
 
-struct DrawableObj {
-    DrawableObj(Material& mat) : renderMaterial(&mat){}
+struct IDrawableObj {
+    IDrawableObj(Material& mat) : renderMaterial(&mat){}
     Material* renderMaterial;
-    virtual void bindResources(const vk::raii::CommandBuffer& buffer) = 0;
-    virtual size_t getNumOfDrawIndices() = 0;
-    virtual ~DrawableObj() = default;
+    virtual void bindResources(const vk::raii::Device& device, const vk::raii::CommandBuffer& buffer, const vk::raii::DescriptorSet& dstDescrSet){};
+    virtual size_t getNumOfDrawIndices(){return 0;};
+    virtual ~IDrawableObj() = default;
 };
 
+
+struct DrawableObj{
+    IDrawableObj obj;
+    void bindResources(const vk::raii::Device& device, const vk::raii::CommandBuffer& buffer, const vk::raii::DescriptorSet& dstDescrSet){
+        obj.bindResources(device, buffer, dstDescrSet);
+    }
+    size_t getNumOfDrawIndices(){
+        return obj.getNumOfDrawIndices();
+    }
+};
 
 
 

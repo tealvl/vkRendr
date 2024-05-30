@@ -337,6 +337,21 @@ vk::raii::DescriptorSetLayout createDescriptorSetLayout(
     }
 
 
+std::vector<vk::raii::DescriptorSet> createDescriptorSets(
+    const vk::raii::Device& device,  
+    const vk::raii::DescriptorPool& descriptorPool,
+    const vk::raii::DescriptorSetLayout& descriptorSetLayout, 
+    int maxFramesInFlight){ 
+
+    std::vector<vk::raii::DescriptorSet> descriptorSets;
+    std::vector<vk::DescriptorSetLayout> layouts(maxFramesInFlight, *descriptorSetLayout);
+    vk::DescriptorSetAllocateInfo allocInfo(*descriptorPool, static_cast<uint32_t>(layouts.size()), layouts.data());
+    descriptorSets = device.allocateDescriptorSets(allocInfo);
+
+    return descriptorSets;
+}
+
+
 vk::raii::DescriptorSetLayout createUboAndSamplerDescriptorSetLayout(const vk::raii::Device& device) {
     vk::DescriptorSetLayoutBinding uboLayoutBinding(
         0, // binding
@@ -913,15 +928,15 @@ std::vector<rendr::Buffer> createAndMapUniformBuffers(const vk::raii::PhysicalDe
 }
 
 
-vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device, uint32_t maxFramesInFlight, uint32_t batchCount) {
+vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device, uint32_t maxFramesInFlight) {
     std::array<vk::DescriptorPoolSize, 2> poolSizes = {
-        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, maxFramesInFlight * batchCount),
-        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, maxFramesInFlight * batchCount)
+        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, maxFramesInFlight),
+        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, maxFramesInFlight)
     };
 
     vk::DescriptorPoolCreateInfo poolInfo(
         {vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet}, // flags
-        maxFramesInFlight * batchCount, // maxSets
+        maxFramesInFlight, // maxSets
         static_cast<uint32_t>(poolSizes.size()), // poolSizeCount
         poolSizes.data() // pPoolSizes
     );
@@ -973,7 +988,8 @@ descriptorSetLayout_(nullptr),
 renderPass_(nullptr),
 pipelineLayout_(nullptr),
 graphicsPipeline_(nullptr),
-swapChainFramebuffers_()
+swapChainFramebuffers_(),
+descriptorPool_(nullptr)
 {}
 
 
@@ -1167,7 +1183,7 @@ void Renderer::drawFrame(){
     device_.device_.resetFences({*framesSyncObjs_[currentFrame_].inFlightFence});
 
     commandBuffers_[currentFrame_].reset();
-    recordCommandBuffer();
+    recordCommandBuffer(imageIndex);
 
     vk::PipelineStageFlags waitStages = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 
@@ -1197,13 +1213,20 @@ void Renderer::drawFrame(){
 
 }
 
-void Renderer::setDrawableObjects(const std::vector<DrawableObj> &objs){
-    
+void Renderer::setDrawableObjects(std::vector<IDrawableObj*> objs){
+    for(auto& objs : setupIndexToDrawableObjs){
+        objs.second.clear();
+    }
+
+    for(auto& obj : objs){
+        int setupInd = obj->renderMaterial->renderSetupIndex;
+        setupIndexToDrawableObjs[setupInd].push_back(obj);
+    }
 }
 
 void Renderer::initMaterial(Material& material){
     material.renderSetupIndex = matIndCount_;
-    rendrSetups_[matIndCount_] = material.createRendererSetup(*this);
+    rendrSetups_[matIndCount_] = material.createRendererSetup(*this, framesInFlight_);
     matIndCount_++;
 }
 
@@ -1224,7 +1247,7 @@ void Renderer::recreateSwapChain(const rendr::Window& window){
     depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
 
     for(auto& setup : rendrSetups_){
-        setup.second.swapChainFramebuffersRecreationFunc_(*this);
+        setup.second.swapChainFramebuffersRecreationFunc_(*this, setup.second);
     }
 }
 
@@ -1251,23 +1274,73 @@ void Renderer::init(const RendererConfig& config, rendr::Window& window){
     };
 }
 
-void Renderer::recordCommandBuffer(){
+void Renderer::recordCommandBuffer(uint32_t imageIndex){
     vk::raii::CommandBuffer& commandBuffer = commandBuffers_[currentFrame_];
+    vk::CommandBufferBeginInfo beginInfo(
+        {}, // flags
+        nullptr // pInheritanceInfo
+    );
+    commandBuffer.begin(beginInfo);
+
+    for (auto& objs : setupIndexToDrawableObjs ) {
     
-    for (auto& setup : setupIndexToDrawableObjs ) {
+        rendr::RendererSetup& setup = rendrSetups_[objs.first];
+        std::array<vk::ClearValue, 2> clearValues{};
+        clearValues[0].color = std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f};
+        clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 
-        //commandBuffer.setViewport(0, viewport);
-        // commandBuffer.setScissor(0, scissor);
-        // commandBuffer.beginRenderPass(rendrSetups_[i].renderPass_, vk::SubpassContents::eInline);
-        // commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *rendrSetups_[i].graphicsPipeline);
-        //for(DrawableObj& obj : setupIndexToDrawableObjs[i]){
-            //obj.bindResources(commandBuffer);            
-            //нужно знать кол-во индексов
-            // commandBuffer.drawIndexed(static_cast<uint32_t>(singleSimpleMatMeshes_[batchIndex].indices.size()), 1, 0, 0, 0);
-            // commandBuffer.endRenderPass();
-        //}        
-    }
-    // commandBuffer.end();
+        vk::RenderPassBeginInfo renderPassInfo(
+            *setup.renderPass_, // renderPass
+            *setup.swapChainFramebuffers_[imageIndex], // framebuffer
+            vk::Rect2D({0, 0}, swapChain_.swapChainExtent_), // renderArea
+            clearValues // clearValues
+        );
+
+        commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *setup.graphicsPipeline_);
+
+        vk::Viewport viewport(
+            0.0f, 0.0f,
+            static_cast<float>(swapChain_.swapChainExtent_.width),
+            static_cast<float>(swapChain_.swapChainExtent_.height),
+            0.0f, 1.0f
+        );
+        commandBuffer.setViewport(0, viewport);
+
+        vk::Rect2D scissor({0, 0}, swapChain_.swapChainExtent_);
+        commandBuffer.setScissor(0, scissor);
+
+        vk::DescriptorBufferInfo bufferInfo(
+            *uniformBuffers_[currentFrame_].buffer, // buffer
+            0, // offset
+            sizeof(rendr::MVPUniformBufferObject) // range
+        );
+
+        std::array<vk::WriteDescriptorSet, 1> descriptorWrites = {
+            vk::WriteDescriptorSet(
+                *setup.descriptorSets_[currentFrame_], // dstSet
+                0, // dstBinding
+                0, // dstArrayElement
+                1, // descriptorCount
+                vk::DescriptorType::eUniformBuffer, // descriptorType
+                nullptr, // pImageInfo
+                &bufferInfo, // pBufferInfo
+                nullptr // pTexelBufferView
+            )};
+
+        device_.device_.updateDescriptorSets(descriptorWrites, nullptr);
+
+        for(auto& obj : objs.second){
+            obj->bindResources(device_.device_, commandBuffer, setup.descriptorSets_[currentFrame_]);  
+            commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *setup.pipelineLayout_, 0, *setup.descriptorSets_[currentFrame_],{});
+
+            commandBuffer.drawIndexed(obj->getNumOfDrawIndices(), 1, 0, 0, 0);
+        }
+        
+        commandBuffer.endRenderPass();
+    }        
+    commandBuffer.end();
 }
 
 }
+

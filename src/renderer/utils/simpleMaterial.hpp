@@ -2,7 +2,7 @@
 #include "utility.hpp"
 
 class SimpleMaterial : public rendr::Material{
-    rendr::RendererSetup createRendererSetup(const rendr::Renderer& renderer) override{
+    rendr::RendererSetup createRendererSetup(const rendr::Renderer& renderer, int framesInFlight) override{
         
         const rendr::Device& device = renderer.getDevice();
         const rendr::SwapChain& swapChain = renderer.getSwapChain();
@@ -23,12 +23,15 @@ class SimpleMaterial : public rendr::Material{
         );
         setup.swapChainFramebuffers_ = rendr::createSwapChainFramebuffersWithDepthAtt(device.device_, setup.renderPass_, swapChain.swapChainImageViews_, depthImage.imageView, swapChain.swapChainExtent_.width, swapChain.swapChainExtent_.height);
 
-        setup.swapChainFramebuffersRecreationFunc_ = [&setup](const rendr::Renderer& renderer){
+        setup.swapChainFramebuffersRecreationFunc_ = [](const rendr::Renderer& renderer, rendr::RendererSetup& setup){
             const rendr::Device& device = renderer.getDevice();
             const rendr::SwapChain& swapChain = renderer.getSwapChain();
             const rendr::Image& depthImage = renderer.getDepthImage();
             setup.swapChainFramebuffers_ = rendr::createSwapChainFramebuffersWithDepthAtt(device.device_, setup.renderPass_, swapChain.swapChainImageViews_, depthImage.imageView, swapChain.swapChainExtent_.width, swapChain.swapChainExtent_.height);
         };
+
+        setup.descriptorPool_ = rendr::createDescriptorPool(device.device_, framesInFlight);
+        setup.descriptorSets_ = rendr::createDescriptorSets(device.device_, setup.descriptorPool_, setup.descriptorSetLayout_, framesInFlight);
 
         return setup;
     }
