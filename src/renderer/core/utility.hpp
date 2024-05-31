@@ -18,8 +18,6 @@
 #include "window.hpp"
 #include "stb_image.h"
 #include "ufbx.h"
-#include "resourceDataTypes.hpp"
-#include "deviceConfig.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -35,6 +33,164 @@ namespace std {
 }
 
 namespace rendr{
+
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                                    VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                                    void* pUserData
+);
+bool checkValidationLayerSupport();
+void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
+
+
+struct DebugConfig{   
+#ifdef NDEBUG
+    static const bool enableValidationLayers = false;
+#else
+    static const bool enableValidationLayers = true;
+#endif
+    static const std::vector<const char*> validationLayers;
+};
+
+struct AppInfo{
+    static const std::string name;
+    static const std::string engineName;
+    static const int version;
+    static const int engineVersion;
+    static const uint32_t apiVersion;
+};
+
+class Instance {
+private:
+    vk::raii::Context context_;
+    vk::raii::Instance instance_;
+    vk::raii::DebugUtilsMessengerEXT debugUtilsMessenger_;
+
+public:
+    Instance();
+    Instance(Window const & window);
+
+    Instance(const Instance&) = delete;
+    Instance& operator=(const Instance&) = delete;
+
+    Instance(Instance&& other) noexcept;
+
+    Instance& operator=(Instance&& other) noexcept;
+
+    vk::raii::Instance const& operator*() const; 
+};
+
+struct SwapChainConfig{
+    std::function<bool(vk::SurfaceFormatKHR)> isSurfaceFormatSuitable = [](vk::SurfaceFormatKHR format){
+        return format.format == vk::Format::eR8G8B8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+    };
+
+    std::function<bool(vk::PresentModeKHR)> isPresentModeSuitable = [](vk::PresentModeKHR presentMode){
+        return presentMode == vk::PresentModeKHR::eMailbox;
+    };
+};
+
+struct QueueFamilyIndices {
+    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> presentFamily;
+    std::optional<uint32_t> transferFamily;
+    std::optional<uint32_t> computeFamily;
+
+    bool isGraphicsAndPresent() {
+        return graphicsFamily.has_value() && presentFamily.has_value();
+    }
+};
+
+struct DeviceConfig{
+    std::vector<const char*> requiredDeviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    };
+
+    vk::PhysicalDeviceFeatures deviceEnableFeatures;
+
+    std::function<bool(vk::PhysicalDeviceFeatures)> isDeviceFeaturesSuitable = [](vk::PhysicalDeviceFeatures features){
+        return features.samplerAnisotropy && features.geometryShader;
+    };
+
+    std::function<bool(vk::PhysicalDeviceProperties)> isDevicePropertiesSuitable = [](vk::PhysicalDeviceProperties properties){
+        return properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
+    };
+
+    std::function<bool(QueueFamilyIndices)> isDeviceFamilyIndicesSuitable = [](QueueFamilyIndices familyIndices){
+        return familyIndices.isGraphicsAndPresent();
+    };
+    
+};
+
+class Device;
+class SwapChain;
+class RendererSetup;
+class Renderer;
+
+struct Device{
+    rendr::Instance instance_; 
+    vk::raii::SurfaceKHR surface_;
+    vk::raii::PhysicalDevice physicalDevice_;
+    vk::raii::Device device_;
+    vk::raii::Queue graphicsQueue_;
+    vk::raii::Queue presentQueue_;
+    vk::raii::CommandPool commandPool_;
+
+    Device();
+    void create(DeviceConfig config, const rendr::Window& win);
+};
+
+struct RendererSetup{
+    vk::raii::DescriptorSetLayout descriptorSetLayout_;
+    vk::raii::RenderPass renderPass_;
+    vk::raii::PipelineLayout pipelineLayout_;
+    vk::raii::Pipeline graphicsPipeline_;
+    std::vector<vk::raii::Framebuffer> swapChainFramebuffers_;
+    std::function<void(const rendr::Renderer&, rendr::RendererSetup& setup)> swapChainFramebuffersRecreationFunc_;
+    vk::raii::DescriptorPool descriptorPool_;
+    std::vector<vk::raii::DescriptorSet> descriptorSets_;
+
+    RendererSetup();
+};
+
+struct RendererConfig{
+    int framesInFlight = 2;
+    DeviceConfig deviceConfig;
+    SwapChainConfig swapChainConfig;
+};
+
+struct SwapChain{
+    vk::raii::SwapchainKHR swapChain_;
+    vk::Format swapChainImageFormat_;
+    vk::Extent2D swapChainExtent_;
+    std::vector<vk::Image> swapChainImages_;
+    std::vector<vk::raii::ImageView> swapChainImageViews_;
+
+    SwapChain();
+    void create(const rendr::Device&  renderDevice, const rendr::Window& win, const rendr::SwapChainConfig& config);
+    void clear();
+};
+
+struct Image{
+    vk::raii::ImageView imageView;
+    vk::raii::DeviceMemory imageMemory;
+    vk::raii::Image image;
+
+    Image() : image(nullptr), imageMemory(nullptr), imageView(nullptr){}
+};
+
+struct Buffer{   
+    vk::raii::DeviceMemory bufferMemory;
+    vk::raii::Buffer buffer;
+    Buffer() : buffer(nullptr), bufferMemory(nullptr){}
+};
+
+template<typename VertexType>
+struct Mesh{
+    std::vector<VertexType> vertices;
+    std::vector<uint32_t> indices;
+};
 
 
 struct DeviceWithGraphicsAndPresentQueues{
@@ -170,13 +326,13 @@ SwapChainSupportDetails querySwapChainSupport(vk::raii::PhysicalDevice const &de
 
 DeviceWithGraphicsAndPresentQueues createDeviceWithGraphicsAndPresentQueues( vk::raii::PhysicalDevice const & physicalDevice,  vk::raii::SurfaceKHR const & surface, const DeviceConfig& config);
 
-VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const &availableFormats);
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const &availableFormats, const rendr::SwapChainConfig &config);
 
-vk::PresentModeKHR chooseSwapPresentMode(std::vector<vk::PresentModeKHR> const &availablePresentModes);
+vk::PresentModeKHR chooseSwapPresentMode(std::vector<vk::PresentModeKHR> const &availablePresentModes, const rendr::SwapChainConfig &config);
 
 vk::Extent2D chooseSwapExtent(vk::SurfaceCapabilitiesKHR const &capabilities, std::pair<int, int> const &winFramebufferSize);
 
-SwapChainData createSwapChain(vk::raii::PhysicalDevice const &physicalDevice, vk::raii::SurfaceKHR const &surface, vk::raii::Device const &device, Window const &win);
+SwapChainData createSwapChain(vk::raii::PhysicalDevice const &physicalDevice, vk::raii::SurfaceKHR const &surface, vk::raii::Device const &device, rendr::Window const &win, const rendr::SwapChainConfig &config);
 
 vk::raii::ImageView createImageView(vk::raii::Device const &device, vk::Image const &image, vk::Format const &format, vk::ImageAspectFlags aspectFlags);
 
@@ -191,6 +347,8 @@ vk::raii::RenderPass createRenderPass(const vk::raii::Device &device, const std:
 vk::raii::RenderPass createRenderPassWithColorAndDepthAttOneSubpass(const vk::raii::Device &device, vk::Format swapChainImageFormat, vk::Format depthFormat);
 
 vk::raii::DescriptorSetLayout createDescriptorSetLayout(const vk::raii::Device &device, std::vector<vk::DescriptorSetLayoutBinding> bindings);
+
+vk::raii::DescriptorSetLayout createSamplerDescriptorSetLayout(const vk::raii::Device &device);
 
 vk::raii::DescriptorSetLayout createUboAndSamplerDescriptorSetLayout(const vk::raii::Device &device);
 
@@ -236,7 +394,7 @@ rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, 
 
 std::vector<rendr::Buffer> createAndMapUniformBuffers(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, std::vector<void *> &uniformBuffersMappedData, size_t numOfBuffers, MVPUniformBufferObject ubo);
 
-vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device &device, uint32_t maxFramesInFlight, uint32_t batchCount);
+vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device &device, uint32_t maxFramesInFlight);
 
 std::vector<vk::raii::CommandBuffer> createCommandBuffers(const vk::raii::Device &device, const vk::raii::CommandPool &commandPool, uint32_t framesInFlight);
 
@@ -482,6 +640,27 @@ vk::raii::Pipeline createGraphicsPipelineWithDefaults(
     );
 }
 
+struct Camera
+{   
+    constexpr static const glm::vec3 worldUp{0.0f, 1.0f, 0.0f};
+    glm::vec3 pos{1.0f, 1.0f, 1.0f};
+    glm::vec3 look_at_pos{0.0f, 0.0f, 0.0f};
+
+    float fov = 45.0f;
+    float aspect = 16.0f / 9.0f;
+    float near_plane = 0.1f;
+    float far_plane = 1000.0f;
+
+    rendr::MVPUniformBufferObject getMVPubo(float scale, float cameraAspect){
+        rendr::MVPUniformBufferObject ubo;
+        ubo.model = glm::scale(glm::mat4{1.0f}, glm::vec3(scale, scale, scale));
+        ubo.view = glm::lookAt(pos, look_at_pos, worldUp);
+        ubo.proj = glm::perspective(fov, cameraAspect, near_plane, far_plane);
+        ubo.proj[1][1] *= -1;
+        return ubo;
+    }
+};
+
 template<typename VertexType>
 std::map<uint32_t, rendr::Mesh<VertexType>> mergeMeshesByMaterial(const std::vector<std::pair<rendr::Mesh<VertexType>, uint32_t>>& meshesAndMatInd) {
     
@@ -523,74 +702,94 @@ std::map<uint32_t, rendr::Mesh<VertexType>> mergeMeshesByMaterial(const std::vec
     return materialToMesh;
 }
 
-
-template<typename MaterialType>
-std::vector<std::vector<vk::raii::DescriptorSet>> createUboAndSamplerDescriptorSets(
+std::vector<vk::raii::DescriptorSet> createDescriptorSets(    
     const vk::raii::Device& device,  
     const vk::raii::DescriptorPool& descriptorPool,
     const vk::raii::DescriptorSetLayout& descriptorSetLayout, 
-    const std::vector<rendr::Buffer>& uniformBuffers, 
-    const vk::raii::Sampler& textureSampler,
-    uint32_t maxFramesInFlight, 
-    const std::vector<rendr::Batch<MaterialType>>& batches,
-    MVPUniformBufferObject ubo){ 
+    int maxFramesInFlight
+);
 
-   std::vector<std::vector<vk::raii::DescriptorSet>> allDescriptorSets(maxFramesInFlight);
+vk::raii::DescriptorSetLayout createUboDescriptorSetLayout(const vk::raii::Device &device);
 
-    for (uint32_t frameIndex = 0; frameIndex < maxFramesInFlight; ++frameIndex) {
-        std::vector<vk::DescriptorSetLayout> layouts(batches.size(), *descriptorSetLayout);
-        vk::DescriptorSetAllocateInfo allocInfo(
-            *descriptorPool, // descriptorPool
-            layouts // setLayouts
-        );
+class IDrawableObj;
+class Material;
+class DrawableObj;
 
-        std::vector<vk::raii::DescriptorSet> descriptorSets = device.allocateDescriptorSets(allocInfo);
-        allDescriptorSets[frameIndex] = std::move(descriptorSets);
+class Renderer{
+private:
+    int framesInFlight_;  
+    int currentFrame_ = 0;
+    int matIndCount_ = 0;
+    rendr::Device device_;
+    rendr::SwapChain swapChain_;
+    rendr::SwapChainConfig swapChainConfig_;
+    rendr::Image depthImage_;
+    std::map<int, rendr::RendererSetup> rendrSetups_;
+    std::vector<vk::raii::CommandBuffer> commandBuffers_;
+    std::vector<rendr::PerFrameSync> framesSyncObjs_;
+    std::vector<rendr::Buffer> uniformBuffers_;
+    std::vector<void*> uniformBuffersMapped_;
 
-        for (size_t batchIndex = 0; batchIndex < batches.size(); ++batchIndex) {
-            const auto& batch = batches[batchIndex];
+    vk::raii::DescriptorSetLayout descriptorSetLayout_;
+    vk::raii::DescriptorPool descriptorPool_;
+    std::vector<vk::raii::DescriptorSet> descriptorSets_;
 
-            vk::DescriptorBufferInfo bufferInfo(
-                *uniformBuffers[frameIndex].buffer, // buffer
-                0, // offset
-                sizeof(ubo) // range
-            );
+    std::map<int, std::vector<rendr::IDrawableObj*>> setupIndexToDrawableObjs;
 
-            vk::DescriptorImageInfo imageInfo(
-                *textureSampler, // sampler
-                *(batch.materialPtr->colorTexture.imageView),
-                vk::ImageLayout::eShaderReadOnlyOptimal // imageLayout
-            );
-
-            std::array<vk::WriteDescriptorSet, 2> descriptorWrites = {
-                vk::WriteDescriptorSet(
-                    *allDescriptorSets[frameIndex][batchIndex], // dstSet
-                    0, // dstBinding
-                    0, // dstArrayElement
-                    1, // descriptorCount
-                    vk::DescriptorType::eUniformBuffer, // descriptorType
-                    nullptr, // pImageInfo
-                    &bufferInfo, // pBufferInfo
-                    nullptr // pTexelBufferView
-                ),
-                vk::WriteDescriptorSet(
-                    *allDescriptorSets[frameIndex][batchIndex], // dstSet
-                    1, // dstBinding
-                    0, // dstArrayElement
-                    1, // descriptorCount
-                    vk::DescriptorType::eCombinedImageSampler, // descriptorType
-                    &imageInfo, // pImageInfo
-                    nullptr, // pBufferInfo
-                    nullptr // pTexelBufferView
-                )
-            };
-
-            device.updateDescriptorSets(descriptorWrites, nullptr);
-        }
+    void cleanupSwapChain();
+    void recordCommandBuffer(uint32_t imageIndex); 
+public:
+    Renderer();
+    void drawFrame();
+    void setDrawableObjects(std::vector<IDrawableObj*> objs);
+    void initMaterial(Material& material);
+    void init(const RendererConfig& config, rendr::Window& win);
+    void recreateSwapChain(const rendr::Window& window);
+    void waitIdle();
+    void updateUniformBuffer(rendr::MVPUniformBufferObject ubo);
+    float getSwapChainAspect();
+    
+    
+    const rendr::RendererSetup& getRenderSetup(int setupIndex) const{
+        return rendrSetups_.at(setupIndex);
     }
-    return allDescriptorSets;
-}
 
+    const rendr::Device& getDevice() const{
+        return device_;
+    }
+
+    const rendr::SwapChain& getSwapChain() const{
+        return swapChain_;
+    }
+    
+    const rendr::Image& getDepthImage() const{
+        return depthImage_;
+    }
+
+    const int getNumOfFramesInFlight() const{
+        return framesInFlight_;
+    }
+};
+
+struct Material{
+    int renderSetupIndex = -1;
+    virtual RendererSetup createRendererSetup(const rendr::Renderer& renderer,
+        const vk::raii::DescriptorSetLayout& rendererDescriptorSetLayout,
+        int framesInFlight){
+
+        return RendererSetup();
+    };
+    virtual ~Material() = default;
+};
+
+struct IDrawableObj {
+    IDrawableObj(Material& mat) : renderMaterial(&mat){}
+    Material* renderMaterial;
+    virtual void bindResources(
+        const vk::raii::Device& device, const vk::raii::CommandBuffer& buffer, const vk::raii::PipelineLayout& layout, int curFrame){};
+    virtual size_t getNumOfDrawIndices(){return 0;};
+    virtual ~IDrawableObj() = default;
+};
 
 }
 

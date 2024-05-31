@@ -1,7 +1,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
-#include "HelloTriangleApplication.hpp"
+#include "Application.hpp"
 
 int main() {
     Application app;

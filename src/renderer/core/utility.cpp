@@ -116,9 +116,10 @@ DeviceWithGraphicsAndPresentQueues createDeviceWithGraphicsAndPresentQueues( vk:
     return DeviceWithGraphicsAndPresentQueues{std::move(device), std::move(graphicsQueue), std::move(presentQueue)};
 }
 
-VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const & availableFormats) {
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const & availableFormats,
+    const rendr::SwapChainConfig& config) {
     for (const auto& availableFormat : availableFormats) {
-        if (availableFormat.format == vk::Format::eR8G8B8A8Srgb && availableFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
+        if (config.isSurfaceFormatSuitable(availableFormat)) {
             return availableFormat;
         }
     }
@@ -126,9 +127,10 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(std::vector<vk::SurfaceFormatKHR> con
     return availableFormats[0];
 }
 
-vk::PresentModeKHR chooseSwapPresentMode(std::vector<vk::PresentModeKHR> const & availablePresentModes) {
+vk::PresentModeKHR chooseSwapPresentMode(std::vector<vk::PresentModeKHR> const & availablePresentModes,
+    const rendr::SwapChainConfig& config) {
     for (const auto& availablePresentMode : availablePresentModes) {
-        if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
+        if (config.isPresentModeSuitable(availablePresentMode)) {
             return availablePresentMode;
         }
     }
@@ -152,11 +154,16 @@ vk::Extent2D chooseSwapExtent(vk::SurfaceCapabilitiesKHR const & capabilities, s
     }
 }
 
-SwapChainData createSwapChain(vk::raii::PhysicalDevice const & physicalDevice, vk::raii::SurfaceKHR const & surface, vk::raii::Device const & device, rendr::Window const & win) 
+SwapChainData createSwapChain(
+    vk::raii::PhysicalDevice const & physicalDevice, 
+    vk::raii::SurfaceKHR const & surface, 
+    vk::raii::Device const & device, 
+    rendr::Window const & win,
+    const rendr::SwapChainConfig& config) 
 {
     rendr::SwapChainSupportDetails swapChainSupport = rendr::querySwapChainSupport(physicalDevice, surface);
-    vk::SurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
-    vk::PresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+    vk::SurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats, config);
+    vk::PresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes, config);
     vk::Extent2D extent = chooseSwapExtent(swapChainSupport.capabilities, win.getFramebufferSize());
     
     uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1; 
@@ -328,6 +335,49 @@ vk::raii::DescriptorSetLayout createDescriptorSetLayout(
 
         return vk::raii::DescriptorSetLayout(device, layoutInfo);
     }
+
+
+std::vector<vk::raii::DescriptorSet> createDescriptorSets(
+    const vk::raii::Device& device,  
+    const vk::raii::DescriptorPool& descriptorPool,
+    const vk::raii::DescriptorSetLayout& descriptorSetLayout, 
+    int maxFramesInFlight){ 
+
+    std::vector<vk::raii::DescriptorSet> descriptorSets;
+    std::vector<vk::DescriptorSetLayout> layouts(maxFramesInFlight, *descriptorSetLayout);
+    vk::DescriptorSetAllocateInfo allocInfo(*descriptorPool, static_cast<uint32_t>(layouts.size()), layouts.data());
+    descriptorSets = device.allocateDescriptorSets(allocInfo);
+
+    return descriptorSets;
+}
+
+vk::raii::DescriptorSetLayout createUboDescriptorSetLayout(const vk::raii::Device& device) {
+    vk::DescriptorSetLayoutBinding uboLayoutBinding(
+        0, // binding
+        vk::DescriptorType::eUniformBuffer,
+        1, // descriptorCount
+        vk::ShaderStageFlagBits::eVertex,
+        nullptr
+    );
+
+    std::vector<vk::DescriptorSetLayoutBinding> bindings = {uboLayoutBinding};
+
+    return createDescriptorSetLayout(device, bindings);
+}
+
+vk::raii::DescriptorSetLayout createSamplerDescriptorSetLayout(const vk::raii::Device& device) {
+    vk::DescriptorSetLayoutBinding samplerLayoutBinding(
+        0,  // binding
+        vk::DescriptorType::eCombinedImageSampler,
+        1, // descriptorCount
+        vk::ShaderStageFlagBits::eFragment,
+        nullptr
+    );
+
+    std::vector<vk::DescriptorSetLayoutBinding> bindings = {samplerLayoutBinding};
+
+    return createDescriptorSetLayout(device, bindings);
+}
 
 
 vk::raii::DescriptorSetLayout createUboAndSamplerDescriptorSetLayout(const vk::raii::Device& device) {
@@ -906,15 +956,15 @@ std::vector<rendr::Buffer> createAndMapUniformBuffers(const vk::raii::PhysicalDe
 }
 
 
-vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device, uint32_t maxFramesInFlight, uint32_t batchCount) {
+vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device, uint32_t maxFramesInFlight) {
     std::array<vk::DescriptorPoolSize, 2> poolSizes = {
-        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, maxFramesInFlight * batchCount),
-        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, maxFramesInFlight * batchCount)
+        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, maxFramesInFlight),
+        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, maxFramesInFlight)
     };
 
     vk::DescriptorPoolCreateInfo poolInfo(
         {vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet}, // flags
-        maxFramesInFlight * batchCount, // maxSets
+        maxFramesInFlight, // maxSets
         static_cast<uint32_t>(poolSizes.size()), // poolSizeCount
         poolSizes.data() // pPoolSizes
     );
@@ -960,4 +1010,375 @@ std::vector<rendr::PerFrameSync> createSyncObjects(const vk::raii::Device& devic
     return syncObjects;
 }
 
+
+RendererSetup::RendererSetup():
+descriptorSetLayout_(nullptr), 
+renderPass_(nullptr),
+pipelineLayout_(nullptr),
+graphicsPipeline_(nullptr),
+swapChainFramebuffers_(),
+descriptorPool_(nullptr)
+{}
+
+
+SwapChain::SwapChain()
+: swapChain_(nullptr){}
+
+void SwapChain::create(const rendr::Device &renderDevice, const rendr::Window &win, const rendr::SwapChainConfig& config){
+    rendr::SwapChainData swapChainData = rendr::createSwapChain(renderDevice.physicalDevice_, renderDevice.surface_, renderDevice.device_, win, config);
+    swapChain_ = std::move(swapChainData.swapChain);
+    swapChainExtent_ = std::move(swapChainData.swapChainExtent);
+    swapChainImageFormat_ = std::move(swapChainData.swapChainImageFormat);
+    swapChainImages_ = swapChain_.getImages();
+    swapChainImageViews_ = rendr::createImageViews(swapChainImages_, renderDevice.device_, swapChainImageFormat_, vk::ImageAspectFlagBits::eColor);
 }
+
+void SwapChain::clear(){
+    for (auto& imageView : swapChainImageViews_) {
+        imageView.clear();
+    }
+    swapChain_.clear();
+}
+
+
+Device::Device():
+instance_(),
+surface_(nullptr),
+physicalDevice_(nullptr),
+device_(nullptr),
+graphicsQueue_(nullptr),
+presentQueue_(nullptr),
+commandPool_(nullptr)
+{}
+
+void Device::create(DeviceConfig config, const rendr::Window& win){
+    instance_ = rendr::Instance(win);
+    surface_ = win.createSurface(*instance_);
+    physicalDevice_ = pickPhysicalDevice(*instance_, surface_, config);
+    rendr::DeviceWithGraphicsAndPresentQueues deviceAndQueues = rendr::createDeviceWithGraphicsAndPresentQueues(physicalDevice_, surface_, config);
+    device_ = std::move(deviceAndQueues.device);
+    graphicsQueue_ = std::move(deviceAndQueues.graphicsQueue);
+    presentQueue_ = std::move(deviceAndQueues.presentQueue);
+    commandPool_ =  rendr::createGraphicsCommandPool(device_, rendr::findQueueFamilies(*physicalDevice_, *surface_));
+}
+
+
+
+const std::string AppInfo::name = "My Application";
+const std::string AppInfo::engineName = "My Engine";
+const int AppInfo::version = 1; 
+const int AppInfo::engineVersion = 1; 
+const uint32_t AppInfo::apiVersion = VK_API_VERSION_1_3; 
+
+const std::vector<const char*> DebugConfig::validationLayers = {
+    "VK_LAYER_KHRONOS_validation"
+};
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                                    VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                                    void* pUserData) {
+    std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+    return VK_FALSE;
+}
+
+bool checkValidationLayerSupport(){
+    uint32_t layerCount;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    std::vector<VkLayerProperties> availableLayers(layerCount);
+    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+    for (const char* layerName : DebugConfig::validationLayers) {
+        bool layerFound = false;
+
+        for (const auto& layerProperties : availableLayers) {
+            if (strcmp(layerName, layerProperties.layerName) == 0) {
+                layerFound = true;
+                break;
+            }
+        }
+
+        if (!layerFound) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+    createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo.pfnUserCallback = debugCallback;
+    createInfo.pUserData = nullptr; 
+}
+
+Instance::Instance() : context_(), instance_(nullptr), debugUtilsMessenger_(nullptr) {}
+
+Instance::Instance(Window const &window) : context_(), instance_(nullptr), debugUtilsMessenger_(nullptr)
+{
+    if (DebugConfig::enableValidationLayers && !checkValidationLayerSupport())
+    {
+        throw std::runtime_error("validation layers requested, but not available!");
+    }
+
+    vk::ApplicationInfo applicationInfo(
+        AppInfo::name.data(),
+        AppInfo::version,
+        AppInfo::engineName.data(),
+        AppInfo::engineVersion,
+        AppInfo::apiVersion);
+
+    vk::InstanceCreateInfo instanceCreateInfo({}, &applicationInfo);
+
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfoOutsideInstance{};
+    if (DebugConfig::enableValidationLayers)
+    {
+        instanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(DebugConfig::validationLayers.size());
+        instanceCreateInfo.ppEnabledLayerNames = DebugConfig::validationLayers.data();
+        populateDebugMessengerCreateInfo(debugCreateInfoOutsideInstance);
+        instanceCreateInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfoOutsideInstance;
+    }
+    else
+    {
+        instanceCreateInfo.enabledLayerCount = 0;
+        instanceCreateInfo.pNext = nullptr;
+    }
+
+    std::vector<const char *> extensions = window.getRequiredExtensions();
+
+    if (DebugConfig::enableValidationLayers)
+    {
+        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
+
+    instanceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    instanceCreateInfo.ppEnabledExtensionNames = extensions.data();
+
+    instance_ = vk::raii::Instance(context_, instanceCreateInfo);
+
+    if (DebugConfig::enableValidationLayers)
+    {
+        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfoInsideInstance{};
+        populateDebugMessengerCreateInfo(debugCreateInfoInsideInstance);
+        debugUtilsMessenger_ = vk::raii::DebugUtilsMessengerEXT(instance_, debugCreateInfoInsideInstance);
+    }
+}
+Instance::Instance(Instance &&other) noexcept
+: context_(std::move(other.context_)),
+    instance_(std::move(other.instance_)),
+    debugUtilsMessenger_(std::move(other.debugUtilsMessenger_)) 
+{}
+
+Instance &Instance::operator=(Instance &&other) noexcept{
+    if (this != &other) {
+        context_ = std::move(other.context_);
+        instance_ = std::move(other.instance_);
+        debugUtilsMessenger_ = std::move(other.debugUtilsMessenger_);
+    }
+    return *this;
+}
+vk::raii::Instance const &Instance::operator*() const{
+    return instance_;
+}
+
+
+void Renderer::cleanupSwapChain(){
+    for(auto& setup : rendrSetups_){
+        setup.second.swapChainFramebuffers_.clear();
+    }
+
+    depthImage_.imageView.clear();
+    depthImage_.image.clear();
+    depthImage_.imageMemory.clear();
+    swapChain_.clear();
+}
+
+void Renderer::updateUniformBuffer(rendr::MVPUniformBufferObject ubo){
+    memcpy(uniformBuffersMapped_[currentFrame_], &ubo, sizeof(ubo));
+}
+
+Renderer::Renderer()
+: descriptorSetLayout_(nullptr), descriptorPool_(nullptr){}
+
+void Renderer::drawFrame()
+{
+    vk::Result waitFanceRes = device_.device_.waitForFences({*framesSyncObjs_[currentFrame_].inFlightFence}, VK_TRUE, UINT64_MAX);
+
+    std::pair<vk::Result, uint32_t> imageAcqRes = swapChain_.swapChain_.acquireNextImage(UINT64_MAX, 
+        *framesSyncObjs_[currentFrame_].imageAvailableSemaphore, nullptr);
+
+    uint32_t imageIndex = imageAcqRes.second;
+
+    device_.device_.resetFences({*framesSyncObjs_[currentFrame_].inFlightFence});
+
+    commandBuffers_[currentFrame_].reset();
+    recordCommandBuffer(imageIndex);
+
+    vk::PipelineStageFlags waitStages = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+
+    vk::SubmitInfo submitInfo(
+        1, // waitSemaphoreCount
+        &(*framesSyncObjs_[currentFrame_].imageAvailableSemaphore), // pWaitSemaphores
+        &waitStages, // pWaitDstStageMask
+        1, // commandBufferCount
+        &(*commandBuffers_[currentFrame_]), // pCommandBuffers
+        1, // signalSemaphoreCount
+        &(*framesSyncObjs_[currentFrame_].renderFinishedSemaphore) // pSignalSemaphores
+    );
+
+    device_.graphicsQueue_.submit({submitInfo}, *framesSyncObjs_[currentFrame_].inFlightFence);
+
+    vk::PresentInfoKHR presentInfo(
+        1, // waitSemaphoreCount
+        &(*framesSyncObjs_[currentFrame_].renderFinishedSemaphore), // pWaitSemaphores
+        1, // swapchainCount
+        &(*swapChain_.swapChain_), // pSwapchains
+        &imageIndex // pImageIndices
+    );
+    
+    vk::Result presenrRes = device_.presentQueue_.presentKHR(presentInfo);
+
+    currentFrame_ = (currentFrame_ + 1) % framesInFlight_;
+}
+
+void Renderer::setDrawableObjects(std::vector<IDrawableObj*> objs){
+    for(auto& objs : setupIndexToDrawableObjs){
+        objs.second.clear();
+    }
+
+    for(auto& obj : objs){
+        int setupInd = obj->renderMaterial->renderSetupIndex;
+        setupIndexToDrawableObjs[setupInd].push_back(obj);
+    }
+}
+
+void Renderer::initMaterial(Material& material){
+    material.renderSetupIndex = matIndCount_;
+    rendrSetups_[matIndCount_] = material.createRendererSetup(*this, descriptorSetLayout_, framesInFlight_);
+    matIndCount_++;
+}
+
+void Renderer::recreateSwapChain(const rendr::Window& window){
+    auto size = window.getFramebufferSize();
+    int width = size.first;
+    int height = size.second;
+    while (width == 0 || height == 0) {
+        size = window.getFramebufferSize();
+        width = size.first;
+        height = size.second;
+        window.waitEvents();
+    }
+    device_.device_.waitIdle();
+    cleanupSwapChain();
+    swapChain_.create(device_, window, swapChainConfig_);
+
+    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
+
+    for(auto& setup : rendrSetups_){
+        setup.second.swapChainFramebuffersRecreationFunc_(*this, setup.second);
+    }
+}
+
+void Renderer::waitIdle(){
+    device_.device_.waitIdle();
+}
+
+float Renderer::getSwapChainAspect(){
+    return swapChain_.swapChainExtent_.width / (float) swapChain_.swapChainExtent_.height;
+}
+
+void Renderer::init(const RendererConfig& config, rendr::Window& window){
+    framesInFlight_ = config.framesInFlight;
+    device_.create(config.deviceConfig, window);
+    swapChain_.create(device_, window, config.swapChainConfig);
+    swapChainConfig_ = config.swapChainConfig;
+    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
+    uniformBuffers_ = rendr::createAndMapUniformBuffers(device_.physicalDevice_, device_.device_, uniformBuffersMapped_, framesInFlight_, rendr::MVPUniformBufferObject());
+    commandBuffers_ = rendr::createCommandBuffers(device_.device_, device_.commandPool_, framesInFlight_);
+    framesSyncObjs_ = rendr::createSyncObjects(device_.device_, framesInFlight_);
+
+    descriptorSetLayout_ = rendr::createUboDescriptorSetLayout(device_.device_);
+    descriptorPool_ = rendr::createDescriptorPool(device_.device_, framesInFlight_);
+    descriptorSets_ = rendr::createDescriptorSets(device_.device_, descriptorPool_, descriptorSetLayout_, framesInFlight_);
+
+    for(int i = 0; i < framesInFlight_; i++){
+        vk::DescriptorBufferInfo bufferInfo(
+            *uniformBuffers_[i].buffer, // buffer
+            0, // offset
+            sizeof(rendr::MVPUniformBufferObject) // range
+        );
+
+        std::array<vk::WriteDescriptorSet, 1> descriptorWrites = {
+            vk::WriteDescriptorSet(
+                *descriptorSets_[i], // dstSet
+                0, // dstBinding
+                0, // dstArrayElement
+                1, // descriptorCount
+                vk::DescriptorType::eUniformBuffer, // descriptorType
+                nullptr, // pImageInfo  
+                &bufferInfo, // pBufferInfo
+                nullptr // pTexelBufferView
+            )};
+        device_.device_.updateDescriptorSets(descriptorWrites, nullptr);
+    }
+    
+    window.callbacks.winResized = [this, &window](int,int){
+        this->recreateSwapChain(window);
+    };
+}
+
+void Renderer::recordCommandBuffer(uint32_t imageIndex){
+    vk::raii::CommandBuffer& commandBuffer = commandBuffers_[currentFrame_];
+    
+    vk::CommandBufferBeginInfo beginInfo(
+        {}, // flags
+        nullptr // pInheritanceInfo
+    );
+    commandBuffer.begin(beginInfo);
+
+    for (auto& objs : setupIndexToDrawableObjs ) {
+    
+        rendr::RendererSetup& setup = rendrSetups_[objs.first];
+        std::array<vk::ClearValue, 2> clearValues{};
+        clearValues[0].color = std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f};
+        clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+
+        vk::RenderPassBeginInfo renderPassInfo(
+            *setup.renderPass_, // renderPass
+            *setup.swapChainFramebuffers_[imageIndex], // framebuffer
+            vk::Rect2D({0, 0}, swapChain_.swapChainExtent_), // renderArea
+            clearValues // clearValues
+        );
+
+        commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *setup.graphicsPipeline_);
+
+        vk::Viewport viewport(
+            0.0f, 0.0f,
+            static_cast<float>(swapChain_.swapChainExtent_.width),
+            static_cast<float>(swapChain_.swapChainExtent_.height),
+            0.0f, 1.0f
+        );
+        commandBuffer.setViewport(0, viewport);
+
+        vk::Rect2D scissor({0, 0}, swapChain_.swapChainExtent_);
+        commandBuffer.setScissor(0, scissor);
+
+        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *setup.pipelineLayout_, 0, *descriptorSets_[currentFrame_],{});
+        
+        for(auto& obj : objs.second){
+            obj->bindResources(device_.device_, commandBuffer, setup.pipelineLayout_, currentFrame_);  
+
+            commandBuffer.drawIndexed(obj->getNumOfDrawIndices(), 1, 0, 0, 0);
+        }
+        
+        commandBuffer.endRenderPass();
+    }        
+    commandBuffer.end();
+}
+
+}
+

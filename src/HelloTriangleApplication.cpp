@@ -253,3 +253,4 @@ void Application::updateUniformBuffer(uint32_t currentFrame){
 
     memcpy(uniformBuffersMapped_[currentFrame], &ubo, sizeof(ubo));
 }
+

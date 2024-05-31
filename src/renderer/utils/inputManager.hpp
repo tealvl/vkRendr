@@ -5,7 +5,7 @@
 #include <memory>
 #include "keyCodes.h"
 #include "window.hpp"
-#include "camera.hpp"
+#include "utility.hpp"
 
 namespace rendr{
 
