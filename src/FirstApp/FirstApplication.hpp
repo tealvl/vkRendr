@@ -28,8 +28,8 @@
 #include "camera.hpp"
 #include "transform.hpp"
 
-const std::string MODEL_PATH = "C:/Dev/cpp-projects/engine/resources/models/vikingRoom.obj";
-const std::string TEXTURE_PATH = "C:/Dev/cpp-projects/engine/resources/textures/viking_room.png";
+const std::string MODEL_PATH = "C:/Dev/cpp-projects/engine/resources/models/Room.obj";
+const std::string TEXTURE_PATH = "C:/Dev/cpp-projects/engine/resources/textures/room.png";
 
 struct UniformBufferObject {
     alignas(16) glm::mat4 model;
@@ -220,7 +220,7 @@ private:
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
-    rendr::Camera camera;
+    //rendr::Camera camera;
     rendr::Transform model_matrix;
 
     void initWindow();

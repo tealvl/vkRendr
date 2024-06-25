@@ -5,7 +5,7 @@
 #include <memory>
 #include "keyCodes.h"
 #include "window.hpp"
-#include "utility.hpp"
+#include "rendr.hpp"
 
 namespace rendr{
 

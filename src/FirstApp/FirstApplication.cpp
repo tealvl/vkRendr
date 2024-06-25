@@ -528,7 +528,6 @@ void FristApplication::recreateSwapChain()
 
     cleanupSwapChain();
 
-
     createSwapChain();
     createImageViews();
     createDepthResources();
@@ -1456,7 +1455,6 @@ void FristApplication::loadModel() {
         for (const auto& index : shape.mesh.indices) {
             Vertex vertex{};
 
-
             vertex.pos = {
                 attrib.vertices[3 * index.vertex_index + 0],
                 attrib.vertices[3 * index.vertex_index + 1],
@@ -1474,10 +1472,7 @@ void FristApplication::loadModel() {
                 uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
                 vertices.push_back(vertex);
             }
-
             indices.push_back(uniqueVertices[vertex]);
         }
-
-        
     }
 }

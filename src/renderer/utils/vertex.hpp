@@ -6,15 +6,15 @@
 
 namespace rendr{
 
-struct VertexPCT {
+struct VertexPTC {
     glm::vec3 pos;
-    glm::vec3 color;
     glm::vec2 texCoord;
+    glm::vec3 color;
 
     static vk::VertexInputBindingDescription getBindingDescription() {
         return vk::VertexInputBindingDescription(
             0,                              // binding
-            sizeof(VertexPCT),                 // stride
+            sizeof(VertexPTC),                 // stride
             vk::VertexInputRate::eVertex    // inputRate
         );
     }
@@ -26,27 +26,29 @@ struct VertexPCT {
             0,                              // location
             0,                              // binding
             vk::Format::eR32G32B32Sfloat,   // format
-            offsetof(VertexPCT, pos)           // offset
+            offsetof(VertexPTC, pos)           // offset
         );
 
-        attributeDescriptions[1] = vk::VertexInputAttributeDescription(
+   
+        attributeDescriptions[2] = vk::VertexInputAttributeDescription(
             1,                              // location
             0,                              // binding
-            vk::Format::eR32G32B32Sfloat,   // format
-            offsetof(VertexPCT, color)         // offset
+            vk::Format::eR32G32Sfloat,      // format
+            offsetof(VertexPTC, texCoord)      // offset
         );
 
-        attributeDescriptions[2] = vk::VertexInputAttributeDescription(
+            attributeDescriptions[1] = vk::VertexInputAttributeDescription(
             2,                              // location
             0,                              // binding
-            vk::Format::eR32G32Sfloat,      // format
-            offsetof(VertexPCT, texCoord)      // offset
+            vk::Format::eR32G32B32Sfloat,   // format
+            offsetof(VertexPTC, color)         // offset
         );
+
 
         return attributeDescriptions;
     }
 
-    bool operator==(const VertexPCT& other) const {
+    bool operator==(const VertexPTC& other) const {
         return pos == other.pos && color == other.color && texCoord == other.texCoord;
     }
 };

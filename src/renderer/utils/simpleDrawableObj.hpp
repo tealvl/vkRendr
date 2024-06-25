@@ -1,5 +1,5 @@
 #pragma once
-#include "utility.hpp"
+#include "rendr.hpp"
 
 class MeshWithTextureObj : public rendr::IDrawableObj{
     rendr::Image texture;
@@ -12,26 +12,27 @@ class MeshWithTextureObj : public rendr::IDrawableObj{
     size_t numOfIndices;
 public:
 
-    MeshWithTextureObj(rendr::Material& mat)
-    : IDrawableObj(mat), sampler(nullptr),descriptorPool(nullptr) {}
+    MeshWithTextureObj(rendr::ISetupBinder& binder)
+    : IDrawableObj(binder), sampler(nullptr),descriptorPool(nullptr) {}
 
-    void loadMesh(rendr::Mesh<rendr::VertexPTN>& mesh, const rendr::Renderer& renderer){
+    template<typename VertexType>
+    void loadMesh(rendr::Mesh<VertexType>& mesh, const rendr::Renderer& renderer){
         const rendr::Device& device = renderer.getDevice();
-        vertexBuffer = rendr::createVertexBuffer(device.physicalDevice_, device.device_, device.commandPool_,device.graphicsQueue_, mesh.vertices);
-        indexBuffer = rendr::createIndexBuffer(device.physicalDevice_, device.device_, device.commandPool_,device.graphicsQueue_, mesh.indices);
+        vertexBuffer = rendr::createVertexBuffer(device, mesh.vertices);
+        indexBuffer = rendr::createIndexBuffer(device, mesh.indices);
         numOfIndices = mesh.indices.size();
     }
 
     void loadTexture(rendr::STBImageRaii tex, const rendr::Renderer& renderer){
         const rendr::Device& device = renderer.getDevice();
-        texture = rendr::create2DTextureImage(device.physicalDevice_,device.device_, device.commandPool_, device.graphicsQueue_, std::move(tex));
-        sampler = rendr::createTextureSampler(device.device_, device.physicalDevice_);
+        texture = rendr::create2DTextureImage(device, std::move(tex));
+        sampler = rendr::createTextureSampler(device.logicalDevice_, device.physicalDevice_);
         int framesOnFlight = renderer.getNumOfFramesInFlight();
         descriptorSets.clear();
-        descriptorPool = rendr::createDescriptorPool(device.device_, framesOnFlight);
-        const rendr::RendererSetup& setup = renderer.getRenderSetup(renderMaterial->renderSetupIndex);
+        descriptorPool = rendr::createDescriptorPool(device.logicalDevice_, framesOnFlight);
+        const rendr::RendererSetup& setup = renderer.getRenderSetup(setupBinder->renderSetupIndex);
         const vk::raii::DescriptorSetLayout& layout = setup.descriptorSetLayout_;
-        descriptorSets = rendr::createDescriptorSets(device.device_, descriptorPool, layout, framesOnFlight);
+        descriptorSets = rendr::createDescriptorSets(device.logicalDevice_, descriptorPool, layout, framesOnFlight);
 
         for(int i = 0; i < framesOnFlight; i++){
             vk::DescriptorImageInfo imageInfo(
@@ -53,7 +54,7 @@ public:
                 )
             };
 
-            device.device_.updateDescriptorSets(descriptorWrites, nullptr);
+            device.logicalDevice_.updateDescriptorSets(descriptorWrites, nullptr);
         }
     }
 
@@ -61,7 +62,7 @@ public:
         return numOfIndices;
     }
 
-    void bindResources(
+    void bindObjResources(
         const vk::raii::Device& device, 
         const vk::raii::CommandBuffer& buffer, 
         const vk::raii::PipelineLayout& layout,

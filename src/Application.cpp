@@ -8,21 +8,26 @@ void Application::run(){
 void Application::init(){
     rendr::RendererConfig renderConfig;
     renderConfig.deviceConfig.deviceEnableFeatures.setSamplerAnisotropy(true);
+
     renderer.init(renderConfig, window);
     
-    renderer.initMaterial(material);
-    MeshWithTextureObj walls(material);
-    MeshWithTextureObj details(material);
+    renderer.initRenderSetup(setupBinder);
+    MeshWithTextureObj walls(setupBinder);
+    MeshWithTextureObj details(setupBinder);
+
     rendr::STBImageRaii wallsTex("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_walls_baked.png");  
-    rendr::STBImageRaii detailsTex("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_details_Baked.png");  
+    rendr::STBImageRaii detailsTex("C:/Dev/cpp-projects/engine/resources/zen-studio/textures/t_details_Baked.png");    
+    
     walls.loadTexture(std::move(wallsTex), renderer);    
     details.loadTexture(std::move(detailsTex), renderer);
+
     rendr::UfbxSceneRaii fbxScene("C:/Dev/cpp-projects/engine/resources/zen-studio/source/room.fbx");
     auto meshesAndMatInd = rendr::ufbxLoadMeshesPartsSepByMaterial(fbxScene.get());  
     auto fbxMatToMesh = rendr::mergeMeshesByMaterial(meshesAndMatInd);
+
     walls.loadMesh(fbxMatToMesh[0], renderer);
     details.loadMesh(fbxMatToMesh[2], renderer);
-
+    
     objsToDraw.push_back(std::move(walls));
     objsToDraw.push_back(std::move(details));
 
@@ -50,7 +55,7 @@ void Application::mainLoop(){
         inputManager.resetInputOffsets();
 
         rendr::MVPUniformBufferObject ubo = camera.getMVPubo(0.01f, renderer.getSwapChainAspect());
-        renderer.updateUniformBuffer(ubo);
+        renderer.updateMVPUniformBuffer(std::move(ubo));
         
         std::vector<rendr::IDrawableObj*> objToDrawOnThisFrame;
         for(auto& obj : objsToDraw){

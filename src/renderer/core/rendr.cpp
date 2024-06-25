@@ -1,4 +1,4 @@
-#include "utility.hpp"
+#include "rendr.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -17,7 +17,6 @@ bool checkDeviceExtensionSupport(const vk::PhysicalDevice& device, const std::ve
 
     return requiredExtensionsCopy.empty();
 }
-
 
 bool isPhysicalDeviceSuitable(vk::raii::PhysicalDevice const & device, vk::raii::SurfaceKHR const & surface, const DeviceConfig& config) {
     
@@ -552,6 +551,10 @@ vk::raii::CommandPool createGraphicsCommandPool( const vk::raii::Device& device,
 
 }
 
+rendr::Buffer createBuffer(const rendr::Device& device, vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties){
+    return createBuffer(device.physicalDevice_, device.logicalDevice_, size, usage,  properties);
+}
+
 rendr::Buffer createBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties)
 {
     vk::BufferCreateInfo bufferInfo(
@@ -672,6 +675,13 @@ void writeCopyBufferToImageCommand(const vk::raii::CommandBuffer& singleTimeComm
 }
 
 Image create2DTextureImage(
+    const rendr::Device& device,
+    STBImageRaii ImageData){
+    
+    return create2DTextureImage(device.physicalDevice_, device.logicalDevice_, device.commandPool_, device.graphicsQueue_, std::move(ImageData));
+}
+
+Image create2DTextureImage(
     const vk::raii::PhysicalDevice &physicalDevice, 
     const vk::raii::Device &device, 
     const vk::raii::CommandPool& commandPool,
@@ -733,6 +743,7 @@ Image create2DTextureImage(
 
 
 
+
 vk::raii::Sampler createTextureSampler(const vk::raii::Device& device, const vk::raii::PhysicalDevice& physicalDevice) {
     vk::PhysicalDeviceProperties properties = physicalDevice.getProperties();
 
@@ -758,24 +769,24 @@ vk::raii::Sampler createTextureSampler(const vk::raii::Device& device, const vk:
     return vk::raii::Sampler(device, samplerInfo);
 }
 
-std::pair<std::vector<VertexPCT>, std::vector<uint32_t>>  loadModel(const std::string& filepath) {
+std::pair<std::vector<VertexPTC>, std::vector<uint32_t>>  loadModel(const std::string& filepath) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    std::vector<VertexPCT> vertices;
+    std::vector<VertexPTC> vertices;
     std::vector<uint32_t> indices;
 
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filepath.c_str())) {
         throw std::runtime_error(warn + err);
     }
 
-    std::unordered_map<VertexPCT, uint32_t> uniqueVertices{};
+    std::unordered_map<VertexPTC, uint32_t> uniqueVertices{};
 
     for (const auto& shape : shapes) {
         for (const auto& index : shape.mesh.indices) {
-            VertexPCT vertex{};
+            VertexPTC vertex{};
 
 
             vertex.pos = {
@@ -820,7 +831,6 @@ rendr::Mesh<VertexPTN> convertUfbxMeshPart(ufbx_mesh *mesh, ufbx_mesh_part *part
             VertexPTN vertex;
             ufbx_vec3 pos = mesh->vertex_position[index];
             ufbx_vec3 transformedPos = ufbx_transform_position(transformMat, pos);
-
 
             vertex.pos = glm::vec3(transformedPos.x, transformedPos.y, transformedPos.z);
             
@@ -908,7 +918,12 @@ void writeCopyBufferCommand(const vk::raii::CommandBuffer& singleTimeCommandBuff
     singleTimeCommandBuffer.copyBuffer(*srcBuffer, *dstBuffer, copyRegions);
 }
 
-rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, 
+rendr::Buffer createIndexBuffer(const rendr::Device& device, const std::vector<uint32_t>& indices){
+    return createIndexBuffer(device.physicalDevice_, device.logicalDevice_, device.commandPool_, device.graphicsQueue_, indices);
+}
+
+rendr::Buffer createIndexBuffer(
+    const vk::raii::PhysicalDevice &physicalDevice, 
     const vk::raii::Device &device,
     const vk::raii::CommandPool& commandPool,
     const vk::raii::Queue& graphicsQueue,
@@ -1025,12 +1040,12 @@ SwapChain::SwapChain()
 : swapChain_(nullptr){}
 
 void SwapChain::create(const rendr::Device &renderDevice, const rendr::Window &win, const rendr::SwapChainConfig& config){
-    rendr::SwapChainData swapChainData = rendr::createSwapChain(renderDevice.physicalDevice_, renderDevice.surface_, renderDevice.device_, win, config);
+    rendr::SwapChainData swapChainData = rendr::createSwapChain(renderDevice.physicalDevice_, renderDevice.surface_, renderDevice.logicalDevice_, win, config);
     swapChain_ = std::move(swapChainData.swapChain);
     swapChainExtent_ = std::move(swapChainData.swapChainExtent);
     swapChainImageFormat_ = std::move(swapChainData.swapChainImageFormat);
     swapChainImages_ = swapChain_.getImages();
-    swapChainImageViews_ = rendr::createImageViews(swapChainImages_, renderDevice.device_, swapChainImageFormat_, vk::ImageAspectFlagBits::eColor);
+    swapChainImageViews_ = rendr::createImageViews(swapChainImages_, renderDevice.logicalDevice_, swapChainImageFormat_, vk::ImageAspectFlagBits::eColor);
 }
 
 void SwapChain::clear(){
@@ -1045,7 +1060,7 @@ Device::Device():
 instance_(),
 surface_(nullptr),
 physicalDevice_(nullptr),
-device_(nullptr),
+logicalDevice_(nullptr),
 graphicsQueue_(nullptr),
 presentQueue_(nullptr),
 commandPool_(nullptr)
@@ -1056,10 +1071,10 @@ void Device::create(DeviceConfig config, const rendr::Window& win){
     surface_ = win.createSurface(*instance_);
     physicalDevice_ = pickPhysicalDevice(*instance_, surface_, config);
     rendr::DeviceWithGraphicsAndPresentQueues deviceAndQueues = rendr::createDeviceWithGraphicsAndPresentQueues(physicalDevice_, surface_, config);
-    device_ = std::move(deviceAndQueues.device);
+    logicalDevice_ = std::move(deviceAndQueues.device);
     graphicsQueue_ = std::move(deviceAndQueues.graphicsQueue);
     presentQueue_ = std::move(deviceAndQueues.presentQueue);
-    commandPool_ =  rendr::createGraphicsCommandPool(device_, rendr::findQueueFamilies(*physicalDevice_, *surface_));
+    commandPool_ =  rendr::createGraphicsCommandPool(logicalDevice_, rendr::findQueueFamilies(*physicalDevice_, *surface_));
 }
 
 
@@ -1196,7 +1211,7 @@ void Renderer::cleanupSwapChain(){
     swapChain_.clear();
 }
 
-void Renderer::updateUniformBuffer(rendr::MVPUniformBufferObject ubo){
+void Renderer::updateMVPUniformBuffer(rendr::MVPUniformBufferObject ubo){
     memcpy(uniformBuffersMapped_[currentFrame_], &ubo, sizeof(ubo));
 }
 
@@ -1205,14 +1220,14 @@ Renderer::Renderer()
 
 void Renderer::drawFrame()
 {
-    vk::Result waitFanceRes = device_.device_.waitForFences({*framesSyncObjs_[currentFrame_].inFlightFence}, VK_TRUE, UINT64_MAX);
+    vk::Result waitFanceRes = device_.logicalDevice_.waitForFences({*framesSyncObjs_[currentFrame_].inFlightFence}, VK_TRUE, UINT64_MAX);
 
     std::pair<vk::Result, uint32_t> imageAcqRes = swapChain_.swapChain_.acquireNextImage(UINT64_MAX, 
         *framesSyncObjs_[currentFrame_].imageAvailableSemaphore, nullptr);
 
     uint32_t imageIndex = imageAcqRes.second;
 
-    device_.device_.resetFences({*framesSyncObjs_[currentFrame_].inFlightFence});
+    device_.logicalDevice_.resetFences({*framesSyncObjs_[currentFrame_].inFlightFence});
 
     commandBuffers_[currentFrame_].reset();
     recordCommandBuffer(imageIndex);
@@ -1250,15 +1265,15 @@ void Renderer::setDrawableObjects(std::vector<IDrawableObj*> objs){
     }
 
     for(auto& obj : objs){
-        int setupInd = obj->renderMaterial->renderSetupIndex;
+        int setupInd = obj->setupBinder->renderSetupIndex;
         setupIndexToDrawableObjs[setupInd].push_back(obj);
     }
 }
 
-void Renderer::initMaterial(Material& material){
-    material.renderSetupIndex = matIndCount_;
-    rendrSetups_[matIndCount_] = material.createRendererSetup(*this, descriptorSetLayout_, framesInFlight_);
-    matIndCount_++;
+void Renderer::initRenderSetup(ISetupBinder& material){
+    material.renderSetupIndex = setupsIndCount_;
+    rendrSetups_[setupsIndCount_] = material.createRendererSetup(*this, descriptorSetLayout_, framesInFlight_);
+    setupsIndCount_++;
 }
 
 void Renderer::recreateSwapChain(const rendr::Window& window){
@@ -1271,11 +1286,11 @@ void Renderer::recreateSwapChain(const rendr::Window& window){
         height = size.second;
         window.waitEvents();
     }
-    device_.device_.waitIdle();
+    device_.logicalDevice_.waitIdle();
     cleanupSwapChain();
     swapChain_.create(device_, window, swapChainConfig_);
 
-    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
+    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.logicalDevice_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
 
     for(auto& setup : rendrSetups_){
         setup.second.swapChainFramebuffersRecreationFunc_(*this, setup.second);
@@ -1283,7 +1298,7 @@ void Renderer::recreateSwapChain(const rendr::Window& window){
 }
 
 void Renderer::waitIdle(){
-    device_.device_.waitIdle();
+    device_.logicalDevice_.waitIdle();
 }
 
 float Renderer::getSwapChainAspect(){
@@ -1295,14 +1310,15 @@ void Renderer::init(const RendererConfig& config, rendr::Window& window){
     device_.create(config.deviceConfig, window);
     swapChain_.create(device_, window, config.swapChainConfig);
     swapChainConfig_ = config.swapChainConfig;
-    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.device_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
-    uniformBuffers_ = rendr::createAndMapUniformBuffers(device_.physicalDevice_, device_.device_, uniformBuffersMapped_, framesInFlight_, rendr::MVPUniformBufferObject());
-    commandBuffers_ = rendr::createCommandBuffers(device_.device_, device_.commandPool_, framesInFlight_);
-    framesSyncObjs_ = rendr::createSyncObjects(device_.device_, framesInFlight_);
+    depthImage_ = rendr::createDepthImage(device_.physicalDevice_, device_.logicalDevice_, swapChain_.swapChainExtent_.width, swapChain_.swapChainExtent_.height);
+    uniformBuffers_ = rendr::createAndMapUniformBuffers(device_.physicalDevice_, device_.logicalDevice_, uniformBuffersMapped_, framesInFlight_, rendr::MVPUniformBufferObject());
+    commandBuffers_ = rendr::createCommandBuffers(device_.logicalDevice_, device_.commandPool_, framesInFlight_);
+    framesSyncObjs_ = rendr::createSyncObjects(device_.logicalDevice_, framesInFlight_);
 
-    descriptorSetLayout_ = rendr::createUboDescriptorSetLayout(device_.device_);
-    descriptorPool_ = rendr::createDescriptorPool(device_.device_, framesInFlight_);
-    descriptorSets_ = rendr::createDescriptorSets(device_.device_, descriptorPool_, descriptorSetLayout_, framesInFlight_);
+    //TODO сделать настраиваемым
+    descriptorSetLayout_ = rendr::createUboDescriptorSetLayout(device_.logicalDevice_);
+    descriptorPool_ = rendr::createDescriptorPool(device_.logicalDevice_, framesInFlight_);
+    descriptorSets_ = rendr::createDescriptorSets(device_.logicalDevice_, descriptorPool_, descriptorSetLayout_, framesInFlight_);
 
     for(int i = 0; i < framesInFlight_; i++){
         vk::DescriptorBufferInfo bufferInfo(
@@ -1322,7 +1338,7 @@ void Renderer::init(const RendererConfig& config, rendr::Window& window){
                 &bufferInfo, // pBufferInfo
                 nullptr // pTexelBufferView
             )};
-        device_.device_.updateDescriptorSets(descriptorWrites, nullptr);
+        device_.logicalDevice_.updateDescriptorSets(descriptorWrites, nullptr);
     }
     
     window.callbacks.winResized = [this, &window](int,int){
@@ -1340,45 +1356,50 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex){
     commandBuffer.begin(beginInfo);
 
     for (auto& objs : setupIndexToDrawableObjs ) {
-    
-        rendr::RendererSetup& setup = rendrSetups_[objs.first];
-        std::array<vk::ClearValue, 2> clearValues{};
-        clearValues[0].color = std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f};
-        clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+        if(!objs.second.empty()){
+            rendr::RendererSetup& setup = rendrSetups_[objs.first];
+            std::array<vk::ClearValue, 2> clearValues{};
+            clearValues[0].color = std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f};
+            clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 
-        vk::RenderPassBeginInfo renderPassInfo(
-            *setup.renderPass_, // renderPass
-            *setup.swapChainFramebuffers_[imageIndex], // framebuffer
-            vk::Rect2D({0, 0}, swapChain_.swapChainExtent_), // renderArea
-            clearValues // clearValues
-        );
+            vk::RenderPassBeginInfo renderPassInfo(
+                *setup.renderPass_, // renderPass
+                *setup.swapChainFramebuffers_[imageIndex], // framebuffer
+                vk::Rect2D({0, 0}, swapChain_.swapChainExtent_), // renderArea
+                clearValues // clearValues
+            );
 
-        commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-        commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *setup.graphicsPipeline_);
+            commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+            commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *setup.graphicsPipeline_);
 
-        vk::Viewport viewport(
-            0.0f, 0.0f,
-            static_cast<float>(swapChain_.swapChainExtent_.width),
-            static_cast<float>(swapChain_.swapChainExtent_.height),
-            0.0f, 1.0f
-        );
-        commandBuffer.setViewport(0, viewport);
+            vk::Viewport viewport(
+                0.0f, 0.0f,
+                static_cast<float>(swapChain_.swapChainExtent_.width),
+                static_cast<float>(swapChain_.swapChainExtent_.height),
+                0.0f, 1.0f
+            );
+            commandBuffer.setViewport(0, viewport);
 
-        vk::Rect2D scissor({0, 0}, swapChain_.swapChainExtent_);
-        commandBuffer.setScissor(0, scissor);
+            vk::Rect2D scissor({0, 0}, swapChain_.swapChainExtent_);
+            commandBuffer.setScissor(0, scissor);
 
-        commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *setup.pipelineLayout_, 0, *descriptorSets_[currentFrame_],{});
-        
-        for(auto& obj : objs.second){
-            obj->bindResources(device_.device_, commandBuffer, setup.pipelineLayout_, currentFrame_);  
+            //Global renderer resources
+            commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *setup.pipelineLayout_, 0, *descriptorSets_[currentFrame_],{});
+            
+            //Setup resources
+            objs.second[0]->setupBinder->bindSetupResources(device_.logicalDevice_, commandBuffer, setup.pipelineLayout_, currentFrame_);
 
-            commandBuffer.drawIndexed(obj->getNumOfDrawIndices(), 1, 0, 0, 0);
+            for(auto& obj : objs.second){
+                //Obj resources
+                obj->bindObjResources(device_.logicalDevice_, commandBuffer, setup.pipelineLayout_, currentFrame_);  
+
+                commandBuffer.drawIndexed(obj->getNumOfDrawIndices(), 1, 0, 0, 0);
+            }
+            
+            commandBuffer.endRenderPass();
         }
-        
-        commandBuffer.endRenderPass();
+
     }        
     commandBuffer.end();
 }
-
 }
-

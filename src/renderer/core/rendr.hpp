@@ -23,8 +23,8 @@
 #include <glm/gtx/hash.hpp>
 
 namespace std {
-    template<> struct hash<rendr::VertexPCT> {
-        size_t operator()(rendr::VertexPCT const& vertex) const {
+    template<> struct hash<rendr::VertexPTC> {
+        size_t operator()(rendr::VertexPTC const& vertex) const {
             return ((hash<glm::vec3>()(vertex.pos) ^
                    (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
                    (hash<glm::vec2>()(vertex.texCoord) << 1);
@@ -132,7 +132,7 @@ struct Device{
     rendr::Instance instance_; 
     vk::raii::SurfaceKHR surface_;
     vk::raii::PhysicalDevice physicalDevice_;
-    vk::raii::Device device_;
+    vk::raii::Device logicalDevice_;
     vk::raii::Queue graphicsQueue_;
     vk::raii::Queue presentQueue_;
     vk::raii::CommandPool commandPool_;
@@ -191,7 +191,6 @@ struct Mesh{
     std::vector<VertexType> vertices;
     std::vector<uint32_t> indices;
 };
-
 
 struct DeviceWithGraphicsAndPresentQueues{
     vk::raii::Device device;
@@ -376,11 +375,13 @@ void writeTransitionImageLayoutBarrier(const vk::raii::CommandBuffer &singleTime
 
 void writeCopyBufferToImageCommand(const vk::raii::CommandBuffer &singleTimeCommandBuffer, const vk::raii::Buffer &buffer, const vk::raii::Image &image, uint32_t width, uint32_t height);
 
+Image create2DTextureImage(const rendr::Device &device, STBImageRaii ImageData);
+
 Image create2DTextureImage(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandPool &commandPool, const vk::raii::Queue &graphicsQueue, STBImageRaii ImageData);
 
 vk::raii::Sampler createTextureSampler(const vk::raii::Device &device, const vk::raii::PhysicalDevice &physicalDevice);
 
-std::pair<std::vector<VertexPCT>, std::vector<uint32_t>> loadModel(const std::string &filepath);
+std::pair<std::vector<VertexPTC>, std::vector<uint32_t>> loadModel(const std::string &filepath);
 
 ufbx_scene *ufbxOpenScene(const std::string &filepath, bool blenderFlag);
 
@@ -389,6 +390,8 @@ void ufbxCloseScene(ufbx_scene *scene_ptr);
 std::vector<std::pair<rendr::Mesh<VertexPTN>, uint32_t>> ufbxLoadMeshesPartsSepByMaterial(ufbx_scene *scene);
 
 void writeCopyBufferCommand(const vk::raii::CommandBuffer &singleTimeCommandBuffer, const vk::raii::Buffer &srcBuffer, const vk::raii::Buffer &dstBuffer, vk::DeviceSize size);
+
+rendr::Buffer createIndexBuffer(const rendr::Device& device, const std::vector<uint32_t> &indices);
 
 rendr::Buffer createIndexBuffer(const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device, const vk::raii::CommandPool &commandPool, const vk::raii::Queue &graphicsQueue, const std::vector<uint32_t> &indices);
 
@@ -415,7 +418,13 @@ static std::vector<char> readFile(std::string const &filename){
     return buffer;
 }
 
-//concept
+template<typename VertexType>
+rendr::Buffer createVertexBuffer(
+    const rendr::Device& device,
+    const std::vector<VertexType>& vertices){
+    return createVertexBuffer<VertexType>(device.physicalDevice_, device.logicalDevice_, device.commandPool_, device.graphicsQueue_, vertices);  
+}
+
 template<typename VertexType>
 rendr::Buffer createVertexBuffer(
     const vk::raii::PhysicalDevice &physicalDevice, 
@@ -484,7 +493,6 @@ inline vk::raii::Pipeline createGraphicsPipeline(
     return vk::raii::Pipeline(device, nullptr, pipelineInfo);
 }
 
-//concept
 template<typename VertexType>
 vk::raii::Pipeline createGraphicsPipelineWithDefaults(
     const vk::raii::Device& device,
@@ -654,6 +662,7 @@ struct Camera
     rendr::MVPUniformBufferObject getMVPubo(float scale, float cameraAspect){
         rendr::MVPUniformBufferObject ubo;
         ubo.model = glm::scale(glm::mat4{1.0f}, glm::vec3(scale, scale, scale));
+        //ubo.model = glm::rotate(glm::mat4(1.0f), glm::radians(270.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         ubo.view = glm::lookAt(pos, look_at_pos, worldUp);
         ubo.proj = glm::perspective(fov, cameraAspect, near_plane, far_plane);
         ubo.proj[1][1] *= -1;
@@ -712,14 +721,14 @@ std::vector<vk::raii::DescriptorSet> createDescriptorSets(
 vk::raii::DescriptorSetLayout createUboDescriptorSetLayout(const vk::raii::Device &device);
 
 class IDrawableObj;
-class Material;
+class ISetupBinder;
 class DrawableObj;
 
 class Renderer{
 private:
     int framesInFlight_;  
     int currentFrame_ = 0;
-    int matIndCount_ = 0;
+    int setupsIndCount_ = 0;
     rendr::Device device_;
     rendr::SwapChain swapChain_;
     rendr::SwapChainConfig swapChainConfig_;
@@ -742,11 +751,11 @@ public:
     Renderer();
     void drawFrame();
     void setDrawableObjects(std::vector<IDrawableObj*> objs);
-    void initMaterial(Material& material);
+    void initRenderSetup(ISetupBinder& material);
     void init(const RendererConfig& config, rendr::Window& win);
     void recreateSwapChain(const rendr::Window& window);
     void waitIdle();
-    void updateUniformBuffer(rendr::MVPUniformBufferObject ubo);
+    void updateMVPUniformBuffer(rendr::MVPUniformBufferObject ubo);
     float getSwapChainAspect();
     
     
@@ -771,25 +780,37 @@ public:
     }
 };
 
-struct Material{
+struct ISetupBinder{
     int renderSetupIndex = -1;
     virtual RendererSetup createRendererSetup(const rendr::Renderer& renderer,
         const vk::raii::DescriptorSetLayout& rendererDescriptorSetLayout,
-        int framesInFlight){
-
-        return RendererSetup();
-    };
-    virtual ~Material() = default;
+        int framesInFlight) = 0;
+    virtual void bindSetupResources(const vk::raii::Device& device, const vk::raii::CommandBuffer& buffer, const vk::raii::PipelineLayout& layout, int curFrame) = 0;
+    virtual ~ISetupBinder(){};
 };
 
 struct IDrawableObj {
-    IDrawableObj(Material& mat) : renderMaterial(&mat){}
-    Material* renderMaterial;
-    virtual void bindResources(
-        const vk::raii::Device& device, const vk::raii::CommandBuffer& buffer, const vk::raii::PipelineLayout& layout, int curFrame){};
-    virtual size_t getNumOfDrawIndices(){return 0;};
-    virtual ~IDrawableObj() = default;
+    IDrawableObj(ISetupBinder& binder) : setupBinder(&binder){}
+    ISetupBinder* setupBinder;
+    virtual void bindObjResources(const vk::raii::Device& device, const vk::raii::CommandBuffer& buffer, const vk::raii::PipelineLayout& layout, int curFrame) = 0;
+    virtual size_t getNumOfDrawIndices() = 0;
+    virtual ~IDrawableObj(){};
 };
 
-}
+enum class LightType{
+    DIRECTIONAL,
+    SPOT,
+    POINT
+};
 
+struct Light{
+    glm::vec3 pos;
+    LightType type;
+    glm::vec3 direction;
+    glm::vec3 color;
+    float intesity;
+    float cutoff;
+};
+
+
+}

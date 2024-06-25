@@ -27,16 +27,12 @@
 
 #include "camera.hpp"
 #include "transform.hpp"
-#include "utility.hpp"
+#include "rendr.hpp"
 #include "inputManager.hpp"
 #include "CameraManipulator.hpp"
 #include "timer.hpp"
 #include "simpleMaterial.hpp"
 #include "simpleDrawableObj.hpp"
-
-const std::string MODEL_PATH = "C:/Dev/cpp-projects/engine/resources/models/vikingRoom.obj";
-const std::string TEXTURE_PATH = "C:/Dev/cpp-projects/engine/resources/textures/viking_room.png";
-const int FramesInFlight = 2;
 
 class Application {
 public:
@@ -54,7 +50,7 @@ private:
     rendr::Window window;
     rendr::Renderer renderer;
 
-    SimpleMaterial material;
+    SimpleSetupBinder setupBinder;
     std::vector<MeshWithTextureObj> objsToDraw;
 
     rendr::InputManager inputManager;
